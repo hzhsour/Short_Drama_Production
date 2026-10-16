@@ -47,7 +47,18 @@ class StateStore:
                     event TEXT NOT NULL,
                     details TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS cost_observations (
+                    job_key TEXT PRIMARY KEY,
+                    episode_id TEXT NOT NULL,
+                    currency TEXT NOT NULL,
+                    calculated_amount TEXT,
+                    exceeds_estimate INTEGER NOT NULL DEFAULT 0,
+                    requires_review INTEGER NOT NULL DEFAULT 0
+                );
             """)
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(cost_observations)")}
+            if "requires_review" not in columns:
+                connection.execute("ALTER TABLE cost_observations ADD COLUMN requires_review INTEGER NOT NULL DEFAULT 0")
             # Atomic first-writer creation also migrates a legacy ledger. Never
             # replace an existing identity: a copied backup keeps the same UUID,
             # whereas an empty replacement at the same path receives a new one.
@@ -153,15 +164,69 @@ class StateStore:
             if existing:
                 if Decimal(existing["amount"]) != amount or existing["currency"] != currency:
                     raise StateError("existing cost reservation differs; review pricing before proceeding")
-                return
             rows = connection.execute("SELECT episode_id,currency,amount FROM reservations").fetchall()
             if any(row["currency"] != currency for row in rows):
                 raise StateError("mixed currencies require a separate project budget ledger")
-            project = sum((Decimal(row["amount"]) for row in rows), Decimal(0))
-            episode = sum((Decimal(row["amount"]) for row in rows if row["episode_id"] == episode_id), Decimal(0))
+            observations = connection.execute("SELECT * FROM cost_observations").fetchall()
+            if any(row["currency"] != currency for row in observations):
+                raise StateError("mixed currencies require a separate project budget ledger")
+            if any(row["exceeds_estimate"] for row in observations):
+                raise StateError("provider-calculated cost exceeded estimate; final billing review required before new paid tasks")
+            if any(row["requires_review"] for row in observations):
+                raise StateError("provider usage/output pricing requires manual review before new paid tasks")
+            costs = {row["job_key"]: Decimal(row["calculated_amount"]) for row in observations if row["calculated_amount"] is not None}
+            detailed = connection.execute("SELECT job_key,episode_id,amount FROM reservations").fetchall()
+            exposures = [(row["episode_id"], max(Decimal(row["amount"]), costs.get(row["job_key"], Decimal(0)))) for row in detailed]
+            if any(value > task_limit for _, value in exposures):
+                raise StateError("existing provider-calculated cost exceeds per-task budget; billing review required")
+            project = sum((value for _, value in exposures), Decimal(0))
+            episode = sum((value for name, value in exposures if name == episode_id), Decimal(0))
+            if project >= project_limit or episode >= episode_limit:
+                raise StateError("budget limit reached; no new paid task may be submitted")
+            if existing:
+                return
             if amount > task_limit or episode + amount > episode_limit or project + amount > project_limit:
                 raise StateError("budget limit exceeded")
             connection.execute("INSERT INTO reservations VALUES(?,?,?,?)", (job_key, episode_id, currency, str(amount)))
+
+    def observe_cost(self, job: dict[str, Any]) -> None:
+        """Persist provider-derived accounting and the job checkpoint atomically.
+
+        Observations never release a reservation or confirm a final invoice.
+        A later missing/smaller response cannot erase an observed exposure.
+        """
+        with self.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            previous = connection.execute("SELECT * FROM cost_observations WHERE job_key=?", (job["job_key"],)).fetchone()
+            calculated = job.get("calculated_cost")
+            if previous and previous["calculated_amount"] is not None:
+                calculated = str(max(Decimal(previous["calculated_amount"]), Decimal(calculated or 0)))
+            exceeds = calculated is not None and Decimal(calculated) > Decimal(job["estimated_cost"])
+            exceeds = bool(exceeds or (previous and previous["exceeds_estimate"]))
+            connection.execute(
+                "INSERT OR REPLACE INTO cost_observations VALUES(?,?,?,?,?,?)",
+                (job["job_key"], job["episode_id"], job["currency"], calculated, int(exceeds),
+                 int(bool(job.get("accounting_requires_review") or (previous and previous["requires_review"])))),
+            )
+            job["calculated_cost"] = calculated
+            job["cost_exceeds_estimate"] = exceeds
+            job["updated_at"] = time.time()
+            connection.execute("UPDATE jobs SET payload=? WHERE job_key=?", (json.dumps(job, ensure_ascii=False), job["job_key"]))
+
+    def financial_summary(self, currency: str) -> dict[str, Any]:
+        with self.connection() as connection:
+            reservations = connection.execute("SELECT job_key,amount FROM reservations WHERE currency=?", (currency,)).fetchall()
+            observations = connection.execute("SELECT * FROM cost_observations WHERE currency=?", (currency,)).fetchall()
+        known = {row["job_key"]: Decimal(row["calculated_amount"]) for row in observations if row["calculated_amount"] is not None}
+        return {
+            "reserved_budget": str(sum((Decimal(row["amount"]) for row in reservations), Decimal(0))),
+            "provider_calculated_cost_known_total": str(sum(known.values(), Decimal(0))) if known else None,
+            "provider_calculated_cost_known_tasks": len(known),
+            "conservative_budget_exposure": str(sum((max(Decimal(row["amount"]), known.get(row["job_key"], Decimal(0))) for row in reservations), Decimal(0))),
+            "new_paid_tasks_blocked_by_cost_review": any(row["exceeds_estimate"] or row["requires_review"] for row in observations),
+            "billing_reconciliation_status": "not_reconciled_with_final_invoice",
+            "notice": "Reservations and provider-derived calculations are not actual debits or guaranteed price caps.",
+        }
 
     def reserved_total(self, currency: str) -> Decimal:
         with self.connection() as connection:

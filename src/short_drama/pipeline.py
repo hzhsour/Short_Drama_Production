@@ -25,6 +25,7 @@ from .state import StateStore
 from .timeline import build_timeline, timeline_srt
 from .video_engine import LiveBlockedError, VideoEngine
 from .validation import safe_relative_path
+from .waiting import WaitPolicy, run_with_wait
 
 
 def project_root() -> Path:
@@ -61,7 +62,7 @@ def _same_media(checksums: dict) -> bool:
 
 
 def _source_audio_hashes(storyboard: dict, root: Path, mode: str) -> dict[str, str]:
-    if mode == "mock":
+    if mode == "mock" or storyboard.get("sound_mode", "dub") != "dub":
         return {}
     result = {"asset_root": str(root)}
     for shot in storyboard["shots"]:
@@ -114,9 +115,12 @@ def _run_pipeline(
     output: Path | None = None,
     intro_frames: int = 30,
     outro_frames: int = 30,
+    wait_policy: WaitPolicy | None = None,
 ) -> dict:
     script_path, characters_path = Path(script_path).resolve(), Path(characters_path).resolve()
     script, characters = load_json(script_path), load_json(characters_path)
+    if mode == "live" and script.get("sound_mode") not in ("model", "dub", "silent"):
+        raise ValueError("Live剧本必须显式选择sound_mode: model/dub/silent，以免无提示丢弃原声")
     errors = validate_characters(characters)
     if errors:
         raise ValueError("角色档案校验失败:\n" + "\n".join(errors))
@@ -165,10 +169,13 @@ def _run_pipeline(
         record = {"schema": "short-drama.run/v1", "episode_id": storyboard["episode_id"], "inputs": signature,
                   "technical_test": mode == "mock" or audio_mode == "mock", "tasks": {}, "status": "initialized"}
     record["execution_context"] = context
-    record["technical_test"] = mode == "mock" or audio_mode == "mock"
+    sound_mode = storyboard.get("sound_mode", "dub")
+    record["sound_mode"] = sound_mode
+    record["technical_test"] = mode == "mock" or (sound_mode == "dub" and audio_mode == "mock")
     record["mock_video"] = mode == "mock"
-    record["mock_audio"] = audio_mode == "mock"
-    record["speech_status"] = "test_tones_not_speech" if audio_mode == "mock" else "local_audio_requires_listening_review"
+    record["mock_audio"] = sound_mode == "dub" and audio_mode == "mock"
+    record["speech_status"] = ("model_audio_requires_listening_review" if sound_mode == "model" else "silent_by_explicit_choice" if sound_mode == "silent"
+                               else "test_tones_not_speech" if audio_mode == "mock" else "local_audio_requires_listening_review")
 
     def checkpoint(stage: str, status: str = "succeeded", **details) -> None:
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -199,8 +206,12 @@ def _run_pipeline(
     checkpoint("ledger", ledger_id=engine.state.ledger_id, note="首次提交前持久化账本身份；恢复时先只读核验")
     plan = engine.plan(storyboard)
     write_json(root / "video-plan.json", {"episode_id": storyboard["episode_id"], "mode": mode, "jobs": plan})
+    def video_checkpoint(result: dict) -> None:
+        write_json(root / "video-result.json", result)
+        if result.get("wait"):
+            checkpoint("video_wait", "waiting_video" if not result["all_succeeded"] else "succeeded", **result["wait"])
     try:
-        videos = engine.run(storyboard, max_jobs=max_jobs)
+        videos = run_with_wait(engine, storyboard, max_jobs=max_jobs, policy=wait_policy, checkpoint=video_checkpoint)
     except LiveBlockedError as error:
         checkpoint("video", "paused", reason=str(error))
         return record
@@ -212,7 +223,8 @@ def _run_pipeline(
         status = "paused" if paused.intersection(statuses.values()) else "failed" if terminal.intersection(statuses.values()) else "waiting_video"
         checkpoint("video", status, jobs=statuses, note="结果不明的提交需人工对账；耗尽重试的任务不会无限重试")
         return record
-    checkpoint("video", estimated_cost=videos["estimated_cost"], currency=videos["currency"], jobs=len(videos["jobs"]))
+    checkpoint("video", estimated_cost=videos["estimated_cost"], currency=videos["currency"], jobs=len(videos["jobs"]),
+               accounting=videos.get("financial_summary"), notice="估算和预算预留不等于真实扣费；最终账单需另行对账")
 
     audio_record_path = root / "audio-result.json"
     previous_audio = record["tasks"].get("audio", {})
@@ -225,7 +237,7 @@ def _run_pipeline(
     checkpoint("audio", checksums=_media_checksums(audio), source_hashes=source_hashes, manifest_sha256=file_hash(audio_record_path), notice=audio.get("notice"))
     timeline = build_timeline(storyboard, videos, audio, intro_frames=intro_frames, outro_frames=outro_frames,
                               title=storyboard.get("title", storyboard["episode_id"]),
-                              subtitle="本地占位素材 · 测试音调 · 非AI剧情成片" if mode == "mock" else "测试音调 · 非真实配音 · 制作预览" if audio_mode == "mock" else "制作预览 · 等待人工审片")
+                              subtitle="技术测试 · 非AI剧情成片" if mode == "mock" else "测试音调 · 非真实配音 · 制作预览" if record["mock_audio"] else "制作预览 · 等待人工审片")
     timeline["technical_test"] = record["technical_test"]
     timeline_path = root / "timeline.json"
     write_json(timeline_path, timeline)

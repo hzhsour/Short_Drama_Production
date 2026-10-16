@@ -99,6 +99,13 @@ def validate_timeline_media(timeline: dict[str, Any]) -> list[str]:
             metadata = cache[path]
             if source.get("sha256") and source["sha256"] != metadata["sha256"]:
                 errors.append(f"源素材哈希发生变化: {item.get('shot_id', item.get('id'))}")
+            if wanted == "video":
+                has_source_audio = any(stream.get("codec_type") == "audio" for stream in metadata["streams"])
+                declared = source.get("has_source_audio")
+                if isinstance(declared, bool) and declared != has_source_audio:
+                    errors.append(f"源音轨实测与时间线 has_source_audio 不一致: {item.get('shot_id')}")
+                if source.get("sound_mode") == "model" and not has_source_audio:
+                    errors.append(f"model 模式源素材实际没有音轨: {item.get('shot_id')}")
             matching = [stream for stream in metadata["streams"] if stream.get("codec_type") == wanted]
             if not matching:
                 errors.append(f"源素材缺少 {wanted} 流: {path}")

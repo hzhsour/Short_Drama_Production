@@ -19,7 +19,7 @@ from short_drama.video_engine import EngineError, LiveBlockedError, VideoEngine
 
 def storyboard(episode: str = "EP001", shots: int = 1) -> dict:
     return {
-        "episode_id": episode, "aspect_ratio": "9:16", "fps": 30,
+        "episode_id": episode, "aspect_ratio": "9:16", "fps": 30, "sound_mode": "dub",
         "target_resolution": {"width": 80, "height": 144},
         "shots": [{
             "shot_id": f"{episode}-SC01-SH{index:03}", "scene_id": "SC01", "duration_frames": 6,
@@ -480,6 +480,7 @@ class ArkContractTests(unittest.TestCase):
         adapter = ArkAdapter("doubao-seedance-2-5-260628", transport=transport)
         request = {
             "video_prompt": "雨夜楼梯间，技术合同测试", "duration_seconds": 0.2, "generation_duration_seconds": 4,
+            "sound_mode": "dub", "generate_audio": False,
             "target": {"width": 1080, "height": 1920},
             "reference_images": [{"type": "character", "url": "https://example.invalid/character.png"}],
         }
@@ -504,7 +505,7 @@ class ArkContractTests(unittest.TestCase):
     def test_unsupported_local_upload_and_video_input_are_blocked_without_http(self):
         transport = FakeTransport()
         adapter = ArkAdapter("doubao-seedance-2-5-260628", transport=transport)
-        base = {"video_prompt": "test", "generation_duration_seconds": 4, "target": {"width": 1080, "height": 1920}}
+        base = {"video_prompt": "test", "generation_duration_seconds": 4, "target": {"width": 1080, "height": 1920}, "sound_mode": "dub", "generate_audio": False}
         for additions in ({"reference_images": [{"path": "/private.png"}]}, {"reference_videos": [{"url": "https://example.invalid/input.mp4"}]}):
             with self.assertRaises(ProviderError):
                 adapter.submit({**base, **additions}, "hash")
@@ -560,7 +561,7 @@ class DownloadTransportTests(unittest.TestCase):
             with self.assertRaisesRegex(ProviderError, "byte limit"):
                 HttpTransport(opener=Opener(), max_download_bytes=3).download(self.url, target)
             self.assertFalse(target.exists())
-            with patch("short_drama.providers.ark.time.monotonic", side_effect=[0, 0, 200]):
+            with patch("short_drama.providers.ark.time.monotonic", side_effect=[0, 0, 0, 200]):
                 with self.assertRaisesRegex(ProviderError, "time limit"):
                     HttpTransport(opener=Opener(), download_timeout_seconds=180).download(self.url, target)
             self.assertFalse(target.exists())

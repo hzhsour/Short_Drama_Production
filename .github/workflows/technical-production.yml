@@ -55,7 +55,7 @@ jobs:
         run: npm run preview
 
       - name: Render only the public Mock fixture
-        run: npm run drama -- demo --render
+        run: npm run e2e
 
       - name: Collect only verified public fixture outputs
         run: |
@@ -81,6 +81,7 @@ jobs:
           assert script.get("technical_test") is True and script.get("episode_id") == "EP900", "只能上传公开 EP900 技术 fixture"
           assert record.get("technical_test") is True and record.get("status") == "completed", "测试制作未成功完成"
           assert inputs.get("mode") == inputs.get("provider") == inputs.get("audio_mode") == "mock", "禁止上传 Live 或真实配音运行"
+          assert script.get("sound_mode") == record.get("sound_mode") == timeline.get("sound_mode") == "dub", "公开技术片只能使用明确的测试配音模式"
           assert inputs.get("script_sha256") == digest(fixture / "script.json"), "剧本不是本次公开 fixture"
           assert inputs.get("characters_sha256") == digest(fixture / "characters.json"), "角色不是本次公开 fixture"
           assert quality.get("passed") is True and timeline.get("technical_test") is True, "技术质检未通过"

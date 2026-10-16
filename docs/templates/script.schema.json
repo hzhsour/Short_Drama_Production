@@ -10,6 +10,11 @@
     "scenes"
   ],
   "properties": {
+    "sound_mode": {
+      "enum": ["model", "dub", "silent"],
+      "default": "dub",
+      "description": "model保留模型原声且禁用外部音轨；dub静音源视频并使用外部配音/BGM；silent全片静音。Live必须显式声明。"
+    },
     "episode_id": {
       "type": "string",
       "pattern": "^EP\\d{3}$"

@@ -117,6 +117,8 @@ def validate_storyboard(data: Any, characters: Any = None) -> list[str]:
     fps = data.get("fps")
     if not is_integer(fps) or not 1 <= fps <= 120:
         errors.append("fps 必须是 1 到 120 的整数")
+    if data.get("sound_mode", "dub") not in ("model", "dub", "silent"):
+        errors.append("sound_mode 必须为 model（模型原声）、dub（外部配音）或 silent（静音）")
     shots = data.get("shots")
     if not isinstance(shots, list):
         errors.append("shots 必须是数组")
@@ -133,6 +135,8 @@ def validate_storyboard(data: Any, characters: Any = None) -> list[str]:
         if not isinstance(shot, dict):
             errors.append(f"{label} 必须是对象")
             continue
+        if "sound_mode" in shot and shot["sound_mode"] != data.get("sound_mode", "dub"):
+            errors.append(f"{label}.sound_mode 必须与全片 sound_mode 一致")
         for field in SHOT_REQUIRED_FIELDS:
             if field not in shot:
                 errors.append(f"{label} 缺少字段: {field}")

@@ -18,6 +18,8 @@ npm run drama -- demo --render
 
 ## 每次执行完成什么
 
+专项验收补充：可选有界等待见 [等待规则](bounded-waiting.md)，完整迁移音频/字幕/时间线与制作状态使用 [restore-run](prelive-storage.md)。旧 `rebind-storage` 只处理视频库及部分上下文，不能把它称为完整备份恢复。
+
 `VideoEngine.run(storyboard, max_jobs=N)` 是一次有界推进。它对选中的镜头提交尚未提交的任务、查询已有任务，并在任务就绪时下载、解码检查、计算哈希及保存素材。`queued`/`running` 状态会持久化并返回，程序不在内存中永久等待；可安全重试的错误受 `max_retries` 限制。单次 HTTP 请求也有超时。`max_jobs` 限制本轮处理数量，不是永久 worker 数量或完成时间承诺。
 
 同一个运行目录再次执行，会读取制作记录和视频任务数据库，复用已有 provider task ID、预算预留及通过哈希验证的素材。字幕、时间线和输出也有哈希记录，已验证的成片可以复用。输入剧本、角色、模式或片头尾参数改变时，生产流程要求新运行目录，防止旧素材与新审批混用。

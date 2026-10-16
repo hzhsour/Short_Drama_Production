@@ -1,0 +1,139 @@
+{
+  "schema": "short-drama.prelive-acceptance/v1",
+  "checked_at_sydney": "2026-10-17T01:39:48.922174+11:00",
+  "base_main_commit": "2d0aacbe2a5d1e0f9cb225aab47e1096fcce9b42",
+  "branch": "codex/prelive-acceptance",
+  "paid_api_called": false,
+  "private_media_uploaded": false,
+  "live_approval_created": false,
+  "user_budget_decided": false,
+  "checks": {
+    "project_tests": 144,
+    "skill_tests": 5,
+    "validate_passed": true,
+    "typecheck_passed": true,
+    "preview_render_passed": true,
+    "e2e_passed": true
+  },
+  "sound_modes": {
+    "passed": true,
+    "fixture": "local 440Hz AAC video + 880Hz PCM external dub; 160x284/30fps/1s",
+    "results": [
+      {
+        "sound_mode": "model",
+        "passed": true,
+        "sha256": "5b71d35b672eb798573865a2c6f27c2582cc6d370caa42061cce658213b1e046",
+        "external_tracks": 0,
+        "frequency_analysis": {
+          "method": "stdlib radix-2 FFT, Hann window, 32768 samples, +/-8Hz bands",
+          "sample_rate": 48000,
+          "rms": 0.06247125085739117,
+          "band_440hz_rms": 0.062495155050182244,
+          "band_880hz_rms": 1.141653799754418e-06
+        }
+      },
+      {
+        "sound_mode": "dub",
+        "passed": true,
+        "sha256": "1c973b7e7bc0703b5e79b7f5545c57c7ecb3a8a2a81813eef532382a2a0f6269",
+        "external_tracks": 1,
+        "frequency_analysis": {
+          "method": "stdlib radix-2 FFT, Hann window, 32768 samples, +/-8Hz bands",
+          "sample_rate": 48000,
+          "rms": 0.11562595685907998,
+          "band_440hz_rms": 1.3049446827145628e-06,
+          "band_880hz_rms": 0.11562605176557461
+        }
+      },
+      {
+        "sound_mode": "silent",
+        "passed": true,
+        "sha256": "9254bfd7d26c690d431b55d72106a1e1b14e04494d85a38e24697c827433c0d2",
+        "external_tracks": 0,
+        "frequency_analysis": {
+          "method": "stdlib radix-2 FFT, Hann window, 32768 samples, +/-8Hz bands",
+          "sample_rate": 48000,
+          "rms": 0.0,
+          "band_440hz_rms": 0.0,
+          "band_880hz_rms": 0.0
+        }
+      }
+    ]
+  },
+  "async_mock": {
+    "passed": true,
+    "mock_only": true,
+    "first_pass": "poll_limit_waiting_not_failed",
+    "resumed_same_provider_id": true,
+    "states_per_job": [
+      "queued",
+      "running",
+      "succeeded"
+    ],
+    "jobs": [
+      {
+        "shot_id": "EP900-SC01-SH001",
+        "attempts": {
+          "submit": 1,
+          "poll": 3,
+          "download": 1
+        },
+        "sha256": "43ca52ad5a6d8795679803b5bc151b01211aea958266806206b0e471d53314e4"
+      },
+      {
+        "shot_id": "EP900-SC01-SH002",
+        "attempts": {
+          "submit": 1,
+          "poll": 3,
+          "download": 1
+        },
+        "sha256": "8eb652fc1dc8b1d3e84310b6c3a260843649436954d568ee354a56f8044e2707"
+      }
+    ]
+  },
+  "e2e": {
+    "passed": true,
+    "video_sha256": "422395f4c90f12667d741e0011201a37457d4161c3d7bd45c49eb99d7ef553a9",
+    "duration_frames": 180,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "video_codec": "h264",
+    "audio_codec": "aac",
+    "audio_sample_rate": 48000,
+    "submissions_per_shot": {
+      "EP900-SC01-SH001": 1,
+      "EP900-SC01-SH002": 1
+    },
+    "resume_reused_final_file_without_resubmission": true,
+    "warnings": [
+      "安全区域已按时间线几何校验；最终渲染字形和可读性仍需人工观看",
+      "单素材响度偏离 -16 LUFS；最终混音后应再次归一化与检查"
+    ]
+  },
+  "full_directory_recovery": {
+    "passed": true,
+    "scope": "public_mock_fixture_only",
+    "original_paths_unavailable": true,
+    "task_ids_request_hashes_attempts_preserved": true,
+    "final_output_reused_without_rendering": true,
+    "final_video_sha256": "422395f4c90f12667d741e0011201a37457d4161c3d7bd45c49eb99d7ef553a9",
+    "quality_passed": true,
+    "audio_timeline_and_production_state_rebound": true,
+    "production_backup_service_deployed": false
+  },
+  "recovery_verified_files": 12,
+  "remote_actions": {
+    "dispatched": false,
+    "verified_passed": false,
+    "reason": "cache/artifact storage allowance and dispatch permission not verified"
+  },
+  "not_verified": [
+    "real Ark generation and debit",
+    "real model audio / Chinese TTS quality",
+    "final provider invoice reconciliation",
+    "user persistent storage and production backup deployment",
+    "automatic wakeup across Codex tasks",
+    "remote GitHub Actions run"
+  ]
+}

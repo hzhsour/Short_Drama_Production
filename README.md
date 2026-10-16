@@ -6,6 +6,8 @@
 
 ## 快速开始
 
+最新的“真实出片前专项验收”见 [验收报告](docs/prelive-acceptance.md)：明确原声/配音/静音、服务商用量与账单边界、有界等待及完整异地恢复。真实视频/TTS 和远端 Actions 的未验证项单独列出。
+
 需要 Node.js 20+、Python 3.10+、FFmpeg/FFprobe、本机 Chrome/Chromium 和中文字体。npm 依赖固定在锁文件；核心 Python 模块只用标准库。浏览器可通过 `CHROME_EXECUTABLE` 指定，Python 可通过 `PYTHON_EXECUTABLE` 指定。
 
 ```bash
@@ -67,5 +69,7 @@ npm run drama -- status --run-dir runs/technical-demo
 - [真实生成的开通与审批](docs/live-activation.md) · [Seedance 官方核实](docs/integrations/seedance-api-audit.md)
 - [音频工具](docs/integrations/audio-tools.md) · [视觉包装与素材分析](docs/integrations/visual-packaging.md)
 - [云端执行与持久化](docs/cloud-runtime.md) · [本次升级验收报告](docs/upgrade-report.md)
+- [三种音频模式](docs/audio-modes.md) · [用量费用对账](docs/usage-accounting.md) · [有界等待](docs/bounded-waiting.md)
+- [Live 存储条件与完整恢复](docs/prelive-storage.md) · [Actions 专项检查及手动步骤](docs/prelive-actions.md)
 
 GitHub 仅保存可公开的代码、模板和配置。密钥、私人剧本/参考图、审批文件、数据库和大型媒体不得自动上传；`export-metadata` 只导出白名单文本摘要，不会自动提交或上传。首次真实生成必须先确认创意、参考图权限、账户资格、准确报价、请求哈希和预算范围，再由用户明确批准。

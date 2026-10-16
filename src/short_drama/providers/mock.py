@@ -38,7 +38,7 @@ class MockAdapter:
             command = [
                 ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-n",
                 "-f", "lavfi", "-i", f"color=c=0x{colour}:s={target['width']}x{target['height']}:r={target['fps']}",
-                "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+                "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000" if request.get("sound_mode") == "model" else "anullsrc=channel_layout=stereo:sample_rate=48000",
                 "-vf", f"drawtext=textfile={label}:fontcolor=white:fontsize=42:x=(w-tw)/2:y=(h-th)/2",
                 "-frames:v", str(request["duration_frames"]), "-r", str(target["fps"]),
                 "-t", str(request["duration_seconds"]), "-c:v", "libx264", "-preset", "ultrafast",

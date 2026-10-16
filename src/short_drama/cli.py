@@ -22,6 +22,7 @@ from .state import StateStore
 from .timeline import build_timeline, timeline_srt
 from .validation import validate_project, validate_storyboard
 from .video_engine import EngineError, VideoEngine
+from .waiting import WaitPolicy, run_with_wait
 
 
 def _emit(value) -> None:
@@ -37,6 +38,22 @@ def _engine_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--asset-root", type=Path)
     parser.add_argument("--storage-root", type=Path, help="可挂载私有外部存储的本地目录")
     parser.add_argument("--project-workspace", type=Path, help="整部剧共享的引擎账本目录；Live必填")
+
+
+def _wait_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--wait-seconds", type=float, default=0, help="可选有界等待总秒数；0为单轮，不是后台服务")
+    parser.add_argument("--max-polls", type=int, default=20, help="本轮等待的全部状态请求上限，含重试")
+    parser.add_argument("--poll-interval", type=float, default=2)
+    parser.add_argument("--poll-backoff", type=float, default=1.5)
+    parser.add_argument("--poll-max-interval", type=float, default=30)
+
+
+def _wait_policy(args) -> WaitPolicy | None:
+    if args.wait_seconds == 0:
+        return None
+    if args.max_jobs not in (None, 0):
+        raise ValueError("--wait-seconds不能与非零--max-jobs同时使用；等待模式用--max-polls限制请求")
+    return WaitPolicy(args.wait_seconds, args.max_polls, args.poll_interval, args.poll_backoff, args.poll_max_interval)
 
 
 def _provider_config(args) -> dict | None:
@@ -63,6 +80,7 @@ def _engine(args) -> VideoEngine:
 def _generate_once(args, board: dict) -> dict:
     # Persist identity before any provider submit, including when the process
     # is interrupted before video-result.json can be written.
+    policy = _wait_policy(args)
     with run_lock(args.run_dir, allow_untracked=True) as directory:
         if (directory / "run.json").is_file():
             raise ValueError("完整管线目录请用run或demo恢复，不能混用generate入口")
@@ -83,7 +101,12 @@ def _generate_once(args, board: dict) -> dict:
         engine = _engine(args)
         context["ledger_id"] = engine.state.ledger_id
         write_json(context_path, context)
-        result = engine.run(board, max_jobs=args.max_jobs)
+        def save_checkpoint(result):
+            write_json(directory / "video-result.json", result)
+            if result.get("wait"):
+                with (directory / "wait-events.jsonl").open("a", encoding="utf-8") as stream:
+                    stream.write(json.dumps(result["wait"], ensure_ascii=False) + "\n")
+        result = run_with_wait(engine, board, max_jobs=args.max_jobs, policy=policy, checkpoint=save_checkpoint)
         write_json(directory / "video-result.json", result)
         return result
 
@@ -117,6 +140,8 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--max-jobs", type=int)
         command.add_argument("--episodes", type=int, default=1, help="plan按相同分集镜头表投影全剧估算")
         _engine_flags(command)
+        if name == "generate":
+            _wait_flags(command)
     status = commands.add_parser("status", help="读取运行和已完成镜头状态")
     status.add_argument("--run-dir", type=Path, required=True)
     rebind = commands.add_parser("rebind-storage", help="离线按key和SHA重绑已恢复的备份素材路径")
@@ -124,6 +149,12 @@ def parser() -> argparse.ArgumentParser:
     rebind.add_argument("new_storage_root", type=Path)
     rebind.add_argument("--run-dir", type=Path, help="同时离线迁移此run的后端身份；须有已恢复账本")
     rebind.add_argument("--asset-root", type=Path)
+    restore = commands.add_parser("restore-run", help="离线校验并迁移已经完整复制的运行、账本、音视频及时间线路径；不执行备份")
+    restore.add_argument("run_dir", type=Path)
+    restore.add_argument("project_workspace", type=Path)
+    restore.add_argument("new_storage_root", type=Path)
+    restore.add_argument("--asset-root", type=Path, required=True)
+    restore.add_argument("--previous-run-root", type=Path)
     audio = commands.add_parser("audio", help="Mock测试音/本地录音/已配置Piper与字幕")
     audio.add_argument("storyboard", type=Path)
     audio.add_argument("--characters", type=Path, required=True)
@@ -165,10 +196,12 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--max-jobs", type=int)
     run.add_argument("--audio-mode", choices=("mock", "local"), default="mock")
     _engine_flags(run)
+    _wait_flags(run)
     demo = commands.add_parser("demo", help="仅用已公开虚构文本跑Mock技术测试")
     demo.add_argument("--run-dir", type=Path, default=Path("runs/technical-demo"))
     demo.add_argument("--render", action="store_true")
     demo.add_argument("--max-jobs", type=int)
+    _wait_flags(demo)
     export = commands.add_parser("export-metadata", help="显式导出文本摘要；不会自动Git提交或上传")
     export.add_argument("run_dir", type=Path)
     export.add_argument("--output", type=Path, required=True)
@@ -279,6 +312,10 @@ def _execute(args) -> int:
         else:
             engine = VideoEngine(args.project_workspace)
             _emit(engine.rebind_storage(args.new_storage_root))
+    elif command == "restore-run":
+        from .recovery import restore_run
+        _emit(restore_run(args.run_dir, args.project_workspace, args.new_storage_root,
+                          new_asset_root=args.asset_root, previous_run_root=args.previous_run_root))
     elif command == "audio":
         adapter = None
         if args.piper_models:
@@ -313,7 +350,7 @@ def _execute(args) -> int:
         from .packaging import generate_packaging
         _emit(generate_packaging(args.output, args.title, backend=args.backend, project_dir=args.project_dir, duration_seconds=args.seconds))
     elif command in ("run", "demo"):
-        options = {"render": args.render, "max_jobs": args.max_jobs}
+        options = {"render": args.render, "max_jobs": args.max_jobs, "wait_policy": _wait_policy(args)}
         if command == "demo":
             source = project_root() / "examples/technical-demo"
             script, characters = source / "script.json", source / "characters.json"
