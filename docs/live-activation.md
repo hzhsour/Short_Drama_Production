@@ -4,6 +4,8 @@
 
 ## 先完成可审阅的创意
 
+执行前还必须完成 [专项验收中的 Live 配置清单](prelive-acceptance.md)、选择明确的 [sound_mode](audio-modes.md)，并配置 [完整持久化条件](prelive-storage.md)。费用估算、预留、服务商用量和最终账单是不同概念，见 [用量对账规则](usage-accounting.md)。
+
 1. 用 Skills 制作系列圣经、角色档案、EP001 大纲及完整剧本，确认题材、对白、节奏和版权。
 2. 保存结构化剧本和人物 JSON，通过 `validate` 和连续性检查，生成分镜。为角色准备授权的多视角参考图。
 3. 运行本地 `plan` 和 Mock 样片，检查每镜时长及 24 FPS 模型输出与 30 FPS 后期时间线的对应。

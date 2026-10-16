@@ -21,6 +21,7 @@
 | `run SCRIPT --characters FILE --run-dir DIR --render` | 完整有界制作流程；默认视频和音频均 Mock |
 | `demo --render` | 运行固定公开中文技术样例 |
 | `rebind-storage ENGINE_ROOT NEW_STORAGE --run-dir RUN` | 验证已恢复账本与素材，离线更新路径 |
+| `restore-run RUN ENGINE_ROOT NEW_STORAGE --asset-root ASSETS` | 完整迁移已复制的账本、音视频、字幕、时间线和制作状态；不创建备份 |
 | `export-metadata RUN --output NEW.json` | 导出白名单文本摘要，不自动上传或提交 Git |
 | `doctor` / `check` | 检查本地工具 / 执行 test、validate、typecheck |
 
@@ -33,6 +34,10 @@ npm run drama -- demo --render
 ```
 
 退出码：`0` 成功，`1` 校验或质检失败，`2` 输入/工具错误、审批暂停或尚有等待任务。`--max-jobs` 只控制本轮镜头数，等待任务需要下一次调用继续。
+
+可选 `--wait-seconds 60 --max-polls 10 --poll-interval 2 --poll-backoff 1.5 --poll-max-interval 10` 在当前任务内有界等待；不能与非零 `--max-jobs` 组合。超时保持等待状态和原 provider task ID，不自动重提。详见 [等待规则及时间边界](bounded-waiting.md)。
+
+原声、配音、静音在剧本/分镜顶层以 `sound_mode=model|dub|silent` 明确选择，不能用 `--audio-mode mock/local` 代替声音路由决定。Live 必须显式声明；详见 [音频模式](audio-modes.md)。
 
 `run` 默认只推进至时间线，`--render` 才输出成片。每集使用独立 `--run-dir`；Live 整部剧共享 `--project-workspace`。运行记录绑定剧本、人物、参数和执行上下文，不能更换空账本继续同一运行。恢复到不同挂载点时，先还原同一 SQLite 和全部素材，再执行：
 
