@@ -1,0 +1,45 @@
+{
+  "episode_id": "EP900",
+  "title": "雨夜来信 · 技术测试",
+  "technical_test": true,
+  "aspect_ratio": "9:16",
+  "fps": 30,
+  "width": 1080,
+  "height": 1920,
+  "scenes": [
+    {
+      "scene_id": "EP900-SC01",
+      "location": "LOC-001",
+      "shots": [
+        {
+          "shot_id": "EP900-SC01-SH001",
+          "duration_frames": 60,
+          "characters": ["CHAR-001", "CHAR-002"],
+          "action": "林知夏在书店门口举起旧钥匙。画面为本地占位色卡，非AI剧情素材。",
+          "framing": "中近景",
+          "camera_move": "固定机位",
+          "dialogue": [{"character_id": "CHAR-001", "text": "有人留下了这把钥匙。", "start_frame": 5, "duration_frames": 45}],
+          "audio": [{"kind": "ambience", "start_frame": 0, "duration_frames": 60, "volume": 0.04}],
+          "image_prompt": "技术占位素材，不提交外部模型。未来真实画面为雨夜书店门口、暖灯与冷色街道。",
+          "video_prompt": "技术测试：本地生成色卡；未来镜头动作由角色抬手展示钥匙。",
+          "continuity_refs": [],
+          "continuity": {"time": "23:10", "space": "书店门口", "characters": {"CHAR-001": {"outfit": "default", "props": ["旧钥匙"], "expression": "警惕", "screen_position": "left"}, "CHAR-002": {"outfit": "default", "props": ["手电筒"], "expression": "认真", "screen_position": "right"}}, "time_jump": false, "relationship_changes": [], "previous_shot_id": null}
+        },
+        {
+          "shot_id": "EP900-SC01-SH002",
+          "duration_frames": 60,
+          "characters": ["CHAR-001", "CHAR-002"],
+          "action": "陈默抬手示意暂停。画面为另一张本地占位色卡。",
+          "framing": "近景",
+          "camera_move": "固定机位",
+          "dialogue": [{"character_id": "CHAR-002", "text": "先别开门。", "start_frame": 8, "duration_frames": 35}],
+          "audio": [{"kind": "sfx", "start_frame": 0, "duration_frames": 10, "volume": 0.08}],
+          "image_prompt": "技术占位素材，不包含真实演员或付费模型产出。",
+          "video_prompt": "技术测试：第二镜头本地色卡，验证剪辑、字幕和音轨衔接。",
+          "continuity_refs": [],
+          "continuity": {"time": "23:10", "space": "书店门口", "characters": {"CHAR-001": {"outfit": "default", "props": ["旧钥匙"], "expression": "疑惑", "screen_position": "left"}, "CHAR-002": {"outfit": "default", "props": ["手电筒"], "expression": "不安", "screen_position": "right"}}, "time_jump": false, "relationship_changes": [], "previous_shot_id": "EP900-SC01-SH001"}
+        }
+      ]
+    }
+  ]
+}
