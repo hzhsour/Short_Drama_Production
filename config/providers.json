@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "checked_on": "2026-10-16",
+  "default_provider": "mock",
+  "policy": {
+    "default_mode": "mock",
+    "require_explicit_paid_approval": true,
+    "unknown_price_blocks_live": true,
+    "documentation_verified_is_not_live_tested": true
+  },
+  "providers": {
+    "mock": {
+      "display_name": "本地技术测试素材",
+      "verification_status": "local_mock",
+      "model_id": null,
+      "base_url": null,
+      "live_enabled": false,
+      "pricing": {"status": "local_mock", "currency": "CNY", "per_task": 0},
+      "reason": "默认验证任务恢复、素材入库和后期流程，不代表真实模型出片。"
+    },
+    "seedance-2.5": {
+      "display_name": "Seedance 2.5 未选择服务商占位",
+      "verification_status": "unverified",
+      "model_id": null,
+      "base_url": null,
+      "live_enabled": false,
+      "pricing": {"status": "unknown"},
+      "reason": "泛称不是 API 模型 ID；须明确选择地区、服务商、账户与正式模型版本。"
+    },
+    "volcengine-seedance-2.5": {
+      "display_name": "Doubao Seedance 2.5（火山方舟）",
+      "verification_status": "official_documentation_verified",
+      "model_id": "doubao-seedance-2-5-260628",
+      "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "region": "cn-beijing",
+      "customer_country_eligibility": "unknown_account_specific",
+      "auth": {"scheme": "Bearer", "environment_variable": "ARK_API_KEY"},
+      "create_task_path": "/contents/generations/tasks",
+      "get_task_path": "/contents/generations/tasks/{id}",
+      "live_enabled": false,
+      "live_tested": false,
+      "activation_verified_for_this_account": false,
+      "capabilities": {
+        "text_to_video": true,
+        "first_frame": true,
+        "first_last_frame": true,
+        "multimodal_reference": true,
+        "video_editing": true,
+        "video_extension": true,
+        "joint_audio_video": true,
+        "reference_character_consistency": "assistance_only_no_guarantee",
+        "max_reference_images": 30,
+        "max_reference_videos": 10,
+        "max_reference_audio": 10,
+        "min_duration_seconds": 4,
+        "max_duration_seconds": 30,
+        "duration_type": "integer",
+        "frame_rate": 24,
+        "resolutions": ["480p", "720p", "1080p"],
+        "portrait_output_dimensions": {"480p": [480, 854], "720p": [720, 1280], "1080p": [1080, 1920]},
+        "text_reference_aspect_ratios": ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"],
+        "image_edit_extension_aspect_ratio": "adaptive_only",
+        "output_formats": ["mp4", "mov"],
+        "mp4_codec_profile": "must_probe_downloaded_asset",
+        "mov_profile": "H.264/yuv444p/PCM"
+      },
+      "pricing": {
+        "status": "official_price_snapshot_not_live_quote",
+        "checked_on": "2026-10-16",
+        "currency": "CNY",
+        "unit": "million_output_tokens",
+        "rates": {
+          "480p": {"without_input_video": 70, "with_input_video": 42},
+          "720p": {"without_input_video": 70, "with_input_video": 42},
+          "1080p": {"without_input_video": 77, "with_input_video": 46}
+        },
+        "token_estimate_formula": "(input_video_seconds + output_seconds) * output_width * output_height * output_fps / 1024",
+        "input_video_minimum_token_floor": "unknown_not_imported",
+        "estimate_supported_scope": "no_input_video_standard_generation_only",
+        "source_url": "https://docs.volcengine.com/docs/ark/model-pricing?lang=zh&redirect=1"
+      },
+      "rate_limits": {
+        "status": "published_maxima_not_guaranteed",
+        "enterprise": {"rpm": 600, "concurrency": 10},
+        "individual": {"rpm": 180, "concurrency": 3},
+        "get_task_qps": 20,
+        "list_tasks_qps": 1
+      },
+      "result_retention": {"task_days": 7, "download_url_hours": 24, "max_downloads": 100},
+      "restrictions": [
+        "禁止默认上传含真人人脸的参考图或视频；肖像授权方案须按官方规则单独配置。",
+        "首帧、首尾帧、编辑和延长任务仅允许 adaptive 宽高比；竖屏输入决定竖屏输出。",
+        "视频编辑时长跟随输入；不能对全部任务类型套用任意 duration。",
+        "有声输出为单声道；后期需按项目时间线重新混音。",
+        "真实生成仍需账户开通、预算报价、明确付费授权和 Live 实测。"
+      ],
+      "sources": [
+        "https://docs.volcengine.com/docs/ark/seedance-2-5?lang=zh",
+        "https://docs.volcengine.com/docs/ark/create-video-generation-task-api?lang=zh",
+        "https://docs.volcengine.com/docs/ark/get-video-generation-task-api?lang=zh",
+        "https://docs.volcengine.com/docs/ark/model-list?lang=zh",
+        "https://docs.volcengine.com/docs/ark/model-pricing?lang=zh&redirect=1",
+        "https://docs.volcengine.com/docs/ark/base-url-and-authentication?lang=en",
+        "https://docs.volcengine.com/docs/ark/seedance-portrait-asset-guide?lang=en"
+      ]
+    },
+    "volcengine-seedance-2.0": {
+      "display_name": "Doubao Seedance 2.0（核实备选）",
+      "verification_status": "official_documentation_verified",
+      "model_id": "doubao-seedance-2-0-260128",
+      "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "region": "cn-beijing",
+      "auth": {"scheme": "Bearer", "environment_variable": "ARK_API_KEY"},
+      "create_task_path": "/contents/generations/tasks",
+      "get_task_path": "/contents/generations/tasks/{id}",
+      "live_enabled": false,
+      "live_tested": false,
+      "activation_verified_for_this_account": false,
+      "capabilities": {
+        "text_to_video": true,
+        "first_frame": true,
+        "first_last_frame": true,
+        "multimodal_reference": true,
+        "joint_audio_video": true,
+        "max_reference_images": 9,
+        "max_reference_videos": 3,
+        "max_reference_audio": 3,
+        "audio_only_reference": false,
+        "min_duration_seconds": 4,
+        "max_duration_seconds": 15,
+        "duration_type": "integer",
+        "frame_rate": 24,
+        "resolutions": ["480p", "720p", "1080p", "4k"],
+        "output_formats": ["mp4"],
+        "reference_character_consistency": "assistance_only_no_guarantee"
+      },
+      "pricing": {
+        "status": "official_price_snapshot_not_live_quote",
+        "checked_on": "2026-10-16",
+        "currency": "CNY",
+        "unit": "million_output_tokens",
+        "rates": {
+          "480p": {"without_input_video": 46, "with_input_video": 28},
+          "720p": {"without_input_video": 46, "with_input_video": 28},
+          "1080p": {"without_input_video": 51, "with_input_video": 31}
+        },
+        "unimported_rates": ["4k"],
+        "input_video_minimum_token_floor": "unknown_not_imported",
+        "estimate_supported_scope": "no_input_video_standard_generation_only",
+        "source_url": "https://docs.volcengine.com/docs/ark/model-pricing?lang=zh&redirect=1"
+      },
+      "sources": [
+        "https://docs.volcengine.com/docs/ark/seedance-2-0?lang=en",
+        "https://docs.volcengine.com/docs/ark/create-video-generation-task-api?lang=zh",
+        "https://docs.volcengine.com/docs/ark/model-pricing?lang=zh&redirect=1"
+      ]
+    },
+    "byteplus-seedance-2.5": {
+      "display_name": "Dreamina Seedance 2.5（BytePlus ModelArk）",
+      "verification_status": "official_documentation_verified",
+      "model_id": "dreamina-seedance-2-5-260628",
+      "base_url": "https://ark.ap-southeast.bytepluses.com/api/v3",
+      "region": "ap-southeast-1",
+      "customer_country_eligibility": "unknown_account_specific",
+      "auth": {"scheme": "Bearer", "environment_variable": "ARK_API_KEY"},
+      "create_task_path": "/contents/generations/tasks",
+      "get_task_path": "/contents/generations/tasks/{id}",
+      "live_enabled": false,
+      "live_tested": false,
+      "activation_verified_for_this_account": false,
+      "pricing": {"status": "unknown", "reason": "未核实该地区全部按量计费档位；不能套用人民币火山方舟价格或资源包单价。"},
+      "sources": [
+        "https://docs.byteplus.com/en/docs/modelark/model-list?redirect=1",
+        "https://docs.byteplus.com/de/docs/modelark/create-video-generation-task-api",
+        "https://docs.byteplus.com/es/docs/modelark/quick-start",
+        "https://docs.byteplus.com/zh-TW/docs/modelark/seedance-2-5"
+      ]
+    }
+  }
+}

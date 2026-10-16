@@ -17,3 +17,13 @@ description: 创建或检查角色圣经、跨镜头外观连续性、参考图�
 逐镜对照人物 ID 和角色圣经，检查年龄感、发型、服装、配饰、体态、伤痕、情绪状态、动作方向及与其他角色的位置关系。跨场变化需有时间或剧情依据。生成提示的固定身份描述保持相同顺序和关键词，动作/光线/镜头描述单独追加。
 
 发现冲突时列出镜头 ID、圣经规则、冲突内容和建议修正；不要静默改写已经确认的设定。将通过审核的提示版本和参考图路径记录到分镜或素材说明中。
+
+## 可执行档案与规则
+
+- 按 `docs/templates/characters.schema.json` 保存 `{ "characters": [...] }`。每人包含稳定 ID、姓名/年龄、面部、头发、身形、服装与道具、多视角参考图、表情、分场造型、历史镜头、关系以及独立的中文声音 profile。
+- 参考图的正面、侧面、背面使用安全的项目相对路径。制作前可以记录计划路径；实际生成前核查文件存在、来源与使用许可。
+- 分镜可声明 `continuity.time/space/characters`，每个出场角色记录 `outfit/props/expression` 和画面位置、进出画方向；造型或道具变化写 `change_reason`，时空跳转写 `time_jump/transition_reason`，关系改变写 `relationship_changes`。
+- Python 接口：`short_drama.continuity.validate_characters(data, root=None)` 校验角色格式和引用；显式传 `root` 才校验参考图实际存在。`check_continuity(storyboard, characters)` 返回 `errors/warnings/scope`，对照前镜头、时空、服装道具、进出画方向和声明的关系变化。
+- 修复格式错误后再审阅连续性警告；不得通过删除警告或静默修改圣经绕过冲突。
+
+自动化仅核对声明的元数据。它不能识别所有生成画面的面部变化，也不能保证人物不变脸、表演自然或剧情语义连贯；必须逐镜人工审阅参考图和实际视频。

@@ -1,0 +1,11 @@
+{
+  "name": "short-drama-visual-packaging",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Isolated, optional local title packaging; Remotion owns the episode timeline.",
+  "engines": {"node": ">=22"},
+  "dependencies": {
+    "hyperframes": "0.8.164",
+    "gsap": "3.14.2"
+  }
+}

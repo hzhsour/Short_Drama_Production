@@ -1,0 +1,4 @@
+interface:
+  display_name: "导演分镜制作包"
+  short_description: "离线分镜模板、镜头交接矩阵与剪辑边界设计。"
+  default_prompt: "使用 $create-storyboard 按项目规则完善导演分镜设计与连续性文档，保留现有 JSON 和档案。"

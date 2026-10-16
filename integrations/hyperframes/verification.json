@@ -1,0 +1,59 @@
+{
+  "checked_on": "2026-10-16",
+  "test_artifacts_only": true,
+  "paid_api_called": false,
+  "versions": {
+    "hyperframes": "0.8.164",
+    "gsap": "3.14.2"
+  },
+  "audited_source_revision": "4e6fcdb3a9f310a9c483622d6a4ca5354a63fb22",
+  "environment_limitations": [
+    "HyperFrames Chromium check/render needs sandbox permission for loopback sockets.",
+    "Read-only home prevents HyperFrames default history recording; check/render exit status passed and artifact provenance is stored here."
+  ],
+  "tests": {
+    "packaging_passed": 6,
+    "analysis_passed": 4
+  },
+  "artifacts": [
+    {
+      "artifact": "renders/visual-packaging-ffmpeg-20261016.mp4",
+      "backend": "ffmpeg",
+      "sha256": "7a385233e406cc6bcdd54ed2d397b546ce8f6b926b6b3c24a6d2a78394181fa5",
+      "width": 1080,
+      "height": 1920,
+      "codec": "h264",
+      "fps": "30/1",
+      "duration_seconds": 1.0,
+      "has_audio": true,
+      "full_decode_passed": true,
+      "hyperframes_check_passed": null
+    },
+    {
+      "artifact": "renders/visual-packaging-hyperframes-20261016.mp4",
+      "backend": "hyperframes",
+      "sha256": "752c8b57e895d8695b06d58abeb0861d27af418be9154ef116c108dae13158a6",
+      "width": 320,
+      "height": 568,
+      "codec": "h264",
+      "fps": "30/1",
+      "duration_seconds": 1.0,
+      "has_audio": false,
+      "full_decode_passed": true,
+      "hyperframes_check_passed": true
+    },
+    {
+      "artifact": "renders/visual-packaging-hyperframes-1080-20261016.mp4",
+      "backend": "hyperframes",
+      "sha256": "cfaec4490525eb7e610f2eb495dfbdc9c80494cdf06b3a4109461568b422a4b8",
+      "width": 1080,
+      "height": 1920,
+      "codec": "h264",
+      "fps": "30/1",
+      "duration_seconds": 1.0,
+      "has_audio": false,
+      "full_decode_passed": true,
+      "hyperframes_check_passed": true
+    }
+  ]
+}
