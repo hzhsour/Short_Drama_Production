@@ -1,0 +1,57 @@
+{
+  "repository": "https://github.com/TateZhouSiu/create-storyboard-skill",
+  "commit": "4b8662e2fee51b37488c77952bbfa302bfeaf36c",
+  "license": "MIT",
+  "reviewed_on": "2026-10-16",
+  "installation": "project-vendored-with-safety-patches",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "upstream_sha256": "b0069350469d0fa050038091acf684b5989e5018cad61ffabc7c6edb8c52eef5",
+      "installed_sha256": "0f3a154ccab3577b4715496e09118bd08389a95fc6783fbc0bea8741fbb7187d",
+      "modified": true
+    },
+    {
+      "path": "agents/openai.yaml",
+      "upstream_sha256": "52bbd02c345469369e2a32e5b42dbb62421f0e7f0c8eb7397945015800ec56c0",
+      "installed_sha256": "2f73418fdfddab19e9d69f85c22e4a02761c249f484f104733b1f157cb3e9361",
+      "modified": true
+    },
+    {
+      "path": "assets/img2_seedance_prompt_template.md",
+      "upstream_sha256": "7120d64907ca3e85dc49aac3f4090ffe06579108d30b2355a6e42e129cb0b792",
+      "installed_sha256": "1124a3617c2552a768313e0c8cda4cfde579309aa17b7a9d6ac200d9cb12c4a6",
+      "modified": true
+    },
+    {
+      "path": "assets/production_package_spec.md",
+      "upstream_sha256": "064d3140a0cd284633aa033d249e4fe20284e15a551f9aa6247eeaf004f0bf85",
+      "installed_sha256": "207bc3f71c33c4bf56d4a1df30e523445f4ff1ef5dc19cb058eededf3af5bc0a",
+      "modified": true
+    },
+    {
+      "path": "assets/storyboard_template.md",
+      "upstream_sha256": "20e5cac908b07f535c87de68beac36a53772a8fc78c12620bdcf0874a45a31fc",
+      "installed_sha256": "e5d1099c4e5e562abfe6b00a1a793adf43bcc9b4fc6d596d2f0df9616a9b8811",
+      "modified": true
+    },
+    {
+      "path": "references/runtime-and-platform.md",
+      "upstream_sha256": "0910d1e5f384cfe3b38feea73ef09daa5d963f359b81fc2687709bbf0d395468",
+      "installed_sha256": "cb7ba11c5e41fc8f1635aa8c3a57eac5a92c3e53b42dce92ead9a73cb6b5177b",
+      "modified": true
+    },
+    {
+      "path": "references/storyboard_workflow.md",
+      "upstream_sha256": "5f25b44873b8ce13e9f4a2659bd54a32954184898a1c5b265ef3531df4085376",
+      "installed_sha256": "7f8081148f4386283f97dba8a506f82077f5c342ccf407cc07c2692bbe3a2e3f",
+      "modified": true
+    },
+    {
+      "path": "scripts/create_storyboard_package.py",
+      "upstream_sha256": "568866a6e076d3d3e03016fbd6b52be10e05b318c670407316241f1f3bd9479a",
+      "installed_sha256": "6a84c2b237d72ad1e7aafdda08fb7f6d7014a068e7169c57980f65d01f6f1a0e",
+      "modified": true
+    }
+  ]
+}

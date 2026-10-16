@@ -1,0 +1,106 @@
+name: Public technical production fixture
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  technical-fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+    steps:
+      - name: Check out reviewed project sources
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install local media dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg fonts-noto-cjk
+
+      - name: Select an already installed local browser
+        run: |
+          python3 - <<'PY'
+          import os
+          import shutil
+          browser = next((path for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser") if (path := shutil.which(name))), None)
+          if browser is None:
+              raise SystemExit("缺少 runner 本地 Chrome/Chromium；未下载浏览器，技术渲染无法继续。")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as stream:
+              stream.write(f"CHROME_EXECUTABLE={browser}\n")
+          print(f"使用本地浏览器: {browser}")
+          PY
+
+      - name: Install locked npm dependencies
+        run: npm ci
+
+      - name: Run all project checks
+        run: npm run check
+
+      - name: Render the existing technical preview
+        run: npm run preview
+
+      - name: Render only the public Mock fixture
+        run: npm run drama -- demo --render
+
+      - name: Collect only verified public fixture outputs
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import shutil
+
+          def load(path):
+              return json.loads(path.read_text(encoding="utf-8"))
+
+          def digest(path):
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+          fixture = Path("examples/technical-demo")
+          run = Path("runs/technical-demo").resolve()
+          script = load(fixture / "script.json")
+          record = load(run / "run.json")
+          quality = load(run / "quality.json")
+          timeline = load(run / "timeline.json")
+          inputs = record.get("inputs", {})
+          assert script.get("technical_test") is True and script.get("episode_id") == "EP900", "只能上传公开 EP900 技术 fixture"
+          assert record.get("technical_test") is True and record.get("status") == "completed", "测试制作未成功完成"
+          assert inputs.get("mode") == inputs.get("provider") == inputs.get("audio_mode") == "mock", "禁止上传 Live 或真实配音运行"
+          assert inputs.get("script_sha256") == digest(fixture / "script.json"), "剧本不是本次公开 fixture"
+          assert inputs.get("characters_sha256") == digest(fixture / "characters.json"), "角色不是本次公开 fixture"
+          assert quality.get("passed") is True and timeline.get("technical_test") is True, "技术质检未通过"
+          output = Path(record["output"]).resolve()
+          assert output.is_relative_to(run) and output.name.startswith("EP900-v") and output.suffix == ".mp4", "输出不在公开 fixture 目录"
+          assert digest(output) == record["tasks"]["render"]["sha256"], "输出哈希不匹配"
+
+          package = Path("artifacts/public-technical-fixture")
+          package.mkdir(parents=True, exist_ok=False)
+          for name in ("run.json", "quality.json", "timeline.json", "subtitles.srt"):
+              shutil.copy2(run / name, package / name)
+          shutil.copy2(output, package / output.name)
+          shutil.copy2(Path("renders/preview.mp4"), package / "legacy-technical-preview.mp4")
+          print("仅收集公开技术 fixture 的成片、字幕与报告；未收集生产媒体、状态库或密钥。")
+          PY
+
+      - name: Upload public technical fixture evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-technical-fixture-${{ github.run_id }}
+          path: artifacts/public-technical-fixture/
+          if-no-files-found: error
+          retention-days: 7

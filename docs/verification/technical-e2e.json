@@ -1,0 +1,76 @@
+{
+  "schema": "short-drama.technical-verification/v1",
+  "checked_at_utc": "2026-10-16T13:32:03.567071+00:00",
+  "passed": true,
+  "errors": [],
+  "technical_test": true,
+  "real_generation_api_called": false,
+  "real_chinese_tts_synthesized": false,
+  "episode_id": "EP900",
+  "input_hashes": {
+    "script_sha256": "4521d3744634194a8994f85823accc231e4ffa8f0bd3bbc6e10edd32ea1b06c6",
+    "characters_sha256": "7b0d0cbb1376a3c5f1d54a64bc1c395a2914a14afcef6940f8e619dfc0a7d740"
+  },
+  "video_sha256": "f937c83f326a1d1a4d9afcc4e2cab3b7caff74c3e9632f6bc6f5c5ce50ed58af",
+  "duration_frames": 180,
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "video_codec": "h264",
+  "audio_codec": "aac",
+  "audio_sample_rate": 48000,
+  "shot_ids": [
+    "EP900-SC01-SH001",
+    "EP900-SC01-SH002"
+  ],
+  "submissions_per_shot": {
+    "EP900-SC01-SH001": 1,
+    "EP900-SC01-SH002": 1
+  },
+  "warnings": [
+    "安全区域已按时间线几何校验；最终渲染字形和可读性仍需人工观看",
+    "单素材响度偏离 -16 LUFS；最终混音后应再次归一化与检查"
+  ],
+  "resume_reused_final_file_without_resubmission": true,
+  "test_commands": {
+    "npm run check": {
+      "passed": true,
+      "project_tests": 105,
+      "skill_tests": 5,
+      "validate": true,
+      "typecheck": true
+    },
+    "npm run preview": {
+      "passed": true,
+      "composition": "ShortDramaPreview",
+      "duration_frames": 180
+    },
+    "npm run e2e": {
+      "passed": true,
+      "paid_api_called": false
+    },
+    "isolated npm ci --ignore-scripts": {
+      "passed": true,
+      "packages": 259
+    },
+    "Python wheel install and console help": {
+      "passed": true,
+      "version": "0.2.0"
+    }
+  },
+  "clean_source_reproduction": {
+    "passed": true,
+    "source": "git archive of staged tracked files; fresh isolated npm ci dependencies",
+    "check": {
+      "project_tests": 105,
+      "skill_tests": 5,
+      "validate": true,
+      "typecheck": true
+    },
+    "e2e_passed": true,
+    "resume_passed": true,
+    "video_sha256": "f937c83f326a1d1a4d9afcc4e2cab3b7caff74c3e9632f6bc6f5c5ce50ed58af",
+    "same_video_sha256_as_workspace": true,
+    "checked_at_utc": "2026-10-16T13:36:35.876171+00:00"
+  }
+}

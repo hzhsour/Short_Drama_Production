@@ -1,35 +1,326 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Short Drama Storyboard",
+  "description": "Frame ranges, ID references, overlap and continuity constraints are additionally checked by the standard-library Python validator. Empty shots are allowed for a draft only; rendering requires shots.",
   "type": "object",
-  "required": ["episode_id", "aspect_ratio", "fps", "shots"],
+  "required": [
+    "episode_id",
+    "aspect_ratio",
+    "fps",
+    "shots"
+  ],
   "properties": {
-    "episode_id": { "type": "string", "pattern": "^EP\\d{3}$" },
-    "aspect_ratio": { "type": "string", "default": "9:16" },
-    "fps": { "type": "integer", "minimum": 1 },
+    "episode_id": {
+      "type": "string",
+      "pattern": "^EP\\d{3}$"
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "pattern": "^[1-9]\\d*:[1-9]\\d*$"
+    },
+    "fps": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120
+    },
     "shots": {
       "type": "array",
       "items": {
         "type": "object",
         "required": [
-          "shot_id", "scene_id", "duration_frames", "characters", "location",
-          "action", "framing", "camera_move", "dialogue", "audio",
-          "image_prompt", "video_prompt", "continuity_refs"
+          "shot_id",
+          "scene_id",
+          "duration_frames",
+          "characters",
+          "location",
+          "action",
+          "framing",
+          "camera_move",
+          "dialogue",
+          "audio",
+          "image_prompt",
+          "video_prompt",
+          "continuity_refs"
         ],
         "properties": {
-          "shot_id": { "type": "string", "pattern": "^EP\\d{3}-SC\\d{2}-SH\\d{2,3}$" },
-          "scene_id": { "type": "string" },
-          "duration_frames": { "type": "integer", "minimum": 1 },
-          "characters": { "type": "array", "items": { "type": "string" } },
-          "location": { "type": "string" },
-          "action": { "type": "string" },
-          "framing": { "type": "string" },
-          "camera_move": { "type": "string" },
-          "dialogue": { "type": "array" },
-          "audio": { "type": "array" },
-          "image_prompt": { "type": "string" },
-          "video_prompt": { "type": "string" },
-          "continuity_refs": { "type": "array", "items": { "type": "string" } }
+          "shot_id": {
+            "type": "string",
+            "pattern": "^EP\\d{3}-SC\\d{2}-SH\\d{2,3}$"
+          },
+          "scene_id": {
+            "type": "string",
+            "pattern": "^EP\\d{3}-SC\\d{2}$"
+          },
+          "duration_frames": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "characters": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^CHAR-\\d{3}$"
+            },
+            "uniqueItems": true
+          },
+          "location": {
+            "type": "string",
+            "minLength": 1
+          },
+          "action": {
+            "type": "string",
+            "minLength": 1
+          },
+          "framing": {
+            "type": "string",
+            "minLength": 1
+          },
+          "camera_move": {
+            "type": "string",
+            "minLength": 1
+          },
+          "image_prompt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "video_prompt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dialogue": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "character_id",
+                "text",
+                "start_frame",
+                "duration_frames"
+              ],
+              "properties": {
+                "character_id": {
+                  "type": "string",
+                  "pattern": "^CHAR-\\d{3}$"
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "start_frame": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "duration_frames": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "audio_path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\:\\u0000]+$"
+                },
+                "volume": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              }
+            }
+          },
+          "audio": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "kind",
+                    "start_frame",
+                    "duration_frames"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "kind": {
+                      "enum": [
+                        "bgm",
+                        "sfx",
+                        "ambience"
+                      ]
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\:\\u0000]+$"
+                    },
+                    "start_frame": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "duration_frames": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "volume": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "continuity_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\:\\u0000]+$"
+            },
+            "uniqueItems": true
+          },
+          "continuity": {
+            "type": "object",
+            "required": [
+              "time",
+              "space",
+              "characters"
+            ],
+            "properties": {
+              "time": {
+                "type": "string",
+                "minLength": 1
+              },
+              "space": {
+                "type": "string",
+                "minLength": 1
+              },
+              "time_jump": {
+                "type": "boolean"
+              },
+              "transition_reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "previous_shot_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^EP\\d{3}-SC\\d{2}-SH\\d{2,3}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "characters": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^CHAR-\\d{3}$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "required": [
+                    "outfit",
+                    "props",
+                    "expression"
+                  ],
+                  "properties": {
+                    "outfit": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "props": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "uniqueItems": true
+                    },
+                    "expression": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "change_reason": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "screen_position": {
+                      "enum": [
+                        "left",
+                        "center",
+                        "right",
+                        "none"
+                      ]
+                    },
+                    "entry": {
+                      "enum": [
+                        "left",
+                        "center",
+                        "right",
+                        "none"
+                      ]
+                    },
+                    "exit": {
+                      "enum": [
+                        "left",
+                        "center",
+                        "right",
+                        "none"
+                      ]
+                    }
+                  }
+                }
+              },
+              "relationship_changes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "character_id",
+                    "other_id",
+                    "relationship",
+                    "reason"
+                  ],
+                  "properties": {
+                    "character_id": {
+                      "type": "string",
+                      "pattern": "^CHAR-\\d{3}$"
+                    },
+                    "other_id": {
+                      "type": "string",
+                      "pattern": "^CHAR-\\d{3}$"
+                    },
+                    "relationship": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "previous_relationship": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }

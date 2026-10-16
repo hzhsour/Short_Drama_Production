@@ -1,0 +1,36 @@
+{
+  "characters": [
+    {
+      "character_id": "CHAR-001",
+      "name": "林知夏",
+      "age": "25岁",
+      "face_features": "技术测试角色，鹅蛋脸，平直眉，深色眼睛",
+      "hairstyle": "黑色及肩短发",
+      "body": "中等身高，匀称体态",
+      "outfits": {"default": {"description": "米色风衣与深灰长裤", "props": ["旧钥匙"]}},
+      "reference_images": {"front": "assets/reference/characters/CHAR-001-front-planned.png", "side": "assets/reference/characters/CHAR-001-side-planned.png", "back": "assets/reference/characters/CHAR-001-back-planned.png"},
+      "expressions": ["警惕", "疑惑"],
+      "fixed_props": ["旧钥匙"],
+      "scene_looks": {"EP900-SC01": "default"},
+      "historical_shots": [],
+      "relationships": {"CHAR-002": "旧友"},
+      "voice": {"profile_id": "lin-technical-tone", "language": "zh-CN", "pitch_hz": 220, "rate": 1.0}
+    },
+    {
+      "character_id": "CHAR-002",
+      "name": "陈默",
+      "age": "28岁",
+      "face_features": "技术测试角色，方脸，浓眉，深色眼睛",
+      "hairstyle": "黑色短发",
+      "body": "偏高，肩背挺直",
+      "outfits": {"default": {"description": "藏青色夹克与黑色长裤", "props": ["手电筒"]}},
+      "reference_images": {"front": "assets/reference/characters/CHAR-002-front-planned.png", "side": "assets/reference/characters/CHAR-002-side-planned.png", "back": "assets/reference/characters/CHAR-002-back-planned.png"},
+      "expressions": ["认真", "不安"],
+      "fixed_props": ["手电筒"],
+      "scene_looks": {"EP900-SC01": "default"},
+      "historical_shots": [],
+      "relationships": {"CHAR-001": "旧友"},
+      "voice": {"profile_id": "chen-technical-tone", "language": "zh-CN", "pitch_hz": 330, "rate": 1.0}
+    }
+  ]
+}

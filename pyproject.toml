@@ -1,9 +1,17 @@
 [project]
 name = "short-drama-production-tools"
-version = "0.1.0"
-description = "标准库驱动的短剧制作数据检查工具"
+version = "0.2.0"
+description = "可恢复的中文短剧制作引擎与本地媒体管线"
 requires-python = ">=3.10"
 dependencies = []
 
-[tool.unittest]
-test-dir = "tests"
+[project.scripts]
+short-drama = "short_drama.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["short_drama*"]
