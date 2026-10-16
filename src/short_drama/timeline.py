@@ -8,8 +8,11 @@ shot, so a visual transition never silently shifts dialogue or shortens an episo
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +20,26 @@ from typing import Any
 SCHEMA = "short-drama.timeline/v1"
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
+SOUND_MODES = ("model", "dub", "silent")
+
+
+def _has_source_audio(path: Path, kind: str, *, legacy_mock: bool = False) -> bool | None:
+    if kind == "image":
+        return False
+    try:
+        if not shutil.which("ffprobe"):
+            raise ValueError("音频模式验收需要本地 FFprobe")
+        result = subprocess.run(["ffprobe", "-v", "error", "-protocol_whitelist", "file,pipe", "-select_streams", "a", "-show_entries", "stream=index", "-of", "json", str(path)], capture_output=True, text=True, timeout=30, check=False)
+        if result.returncode:
+            raise ValueError("无法验证视频源音轨")
+        return bool(json.loads(result.stdout).get("streams"))
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        # Historic Mock unit fixtures contain synthetic bytes, not decodable
+        # video. Preserve that narrowly scoped compatibility with a visible
+        # warning; Live and all newly tagged artifacts must be verifiable.
+        if legacy_mock:
+            return None
+        raise ValueError(f"无法验证视频源音轨: {path}") from error
 
 
 def _integer(value: Any, name: str, minimum: int = 0) -> int:
@@ -82,6 +105,21 @@ def build_timeline(
     source_shots = storyboard.get("shots")
     if not isinstance(source_shots, list) or not source_shots:
         raise ValueError("至少需要一个分镜镜头")
+    mock = video_result.get("mode", "mock") == "mock"
+    sound_mode = storyboard.get("sound_mode", "dub")
+    if sound_mode not in SOUND_MODES:
+        raise ValueError("sound_mode 必须为 model、dub 或 silent")
+    if not mock and "sound_mode" not in storyboard:
+        raise ValueError("非 Mock 时间线必须显式声明 sound_mode，防止无提示丢弃模型原声")
+    if video_result.get("sound_mode", sound_mode) != sound_mode:
+        raise ValueError("视频结果 sound_mode 与分镜不一致")
+    if audio_result.get("sound_mode", "dub") != sound_mode:
+        raise ValueError("音频结果 sound_mode 与分镜不一致")
+    if sound_mode != "dub" and audio_result.get("tracks"):
+        raise ValueError("model/silent 模式禁止外部音轨，避免原声与配音重复播放")
+    warnings: list[str] = []
+    if "sound_mode" not in storyboard:
+        warnings.append("旧 Mock 分镜未声明 sound_mode，兼容为 dub：源视频静音，使用外部音轨")
 
     jobs: dict[str, dict[str, Any]] = {}
     for job in video_result.get("jobs", []):
@@ -108,6 +146,20 @@ def build_timeline(
         digest = _hash(path)
         if artifact.get("sha256") and artifact["sha256"] != digest:
             raise ValueError(f"镜头素材哈希不匹配: {shot_id}")
+        declared_mode = artifact.get("sound_mode", job.get("sound_mode"))
+        if declared_mode is None:
+            if not mock:
+                raise ValueError(f"非 Mock 素材缺少 sound_mode，禁止无提示丢弃原声: {shot_id}")
+            warnings.append(f"旧 Mock 素材缺少 sound_mode，显式兼容为 {sound_mode}: {shot_id}")
+        elif declared_mode != sound_mode:
+            raise ValueError(f"镜头素材 sound_mode 与分镜不一致: {shot_id}")
+        has_source_audio = _has_source_audio(path, kind, legacy_mock=mock and declared_mode is None and sound_mode != "model")
+        if has_source_audio is None:
+            warnings.append(f"旧 Mock 素材无法验证源音轨；仅兼容技术测试，禁止 Live: {shot_id}")
+        if "has_source_audio" in artifact and artifact["has_source_audio"] != has_source_audio:
+            raise ValueError(f"镜头素材 has_source_audio 与实测不一致: {shot_id}")
+        if sound_mode == "model" and (kind != "video" or has_source_audio is not True):
+            raise ValueError(f"model 模式需要实际含音轨的视频，不能静默替换为无声: {shot_id}")
         shot = {
             "shot_id": shot_id,
             "scene_id": source.get("scene_id", ""),
@@ -116,6 +168,7 @@ def build_timeline(
             "duration_frames": duration,
             "media": {
                 "kind": kind, "path": str(path), "sha256": digest,
+                "sound_mode": sound_mode, "has_source_audio": has_source_audio,
                 "source_start_frame": _integer(source.get("source_start_frame", 0), "source_start_frame"),
             },
             "transition": {"kind": "fade" if transition_frames else "cut", "duration_frames": min(transition_frames, (duration - 1) // 2)},
@@ -181,14 +234,14 @@ def build_timeline(
         })
     subtitles.sort(key=lambda line: (line["start_frame"], line["end_frame"], line["id"]))
     manifest = {
-        "schema": SCHEMA, "episode_id": episode_id,
+        "schema": SCHEMA, "episode_id": episode_id, "sound_mode": sound_mode,
         "fps": fps, "width": width, "height": height, "duration_frames": duration_frames,
         "title": title or episode_id, "technical_test": video_result.get("mode", "mock") == "mock",
         "intro": {"start_frame": 0, "duration_frames": intro_frames, "title": title or episode_id, "subtitle": subtitle},
         "outro": {"start_frame": cursor, "duration_frames": outro_frames, "title": "本集结束", "subtitle": subtitle},
         "shots": shots, "tracks": tracks, "subtitles": subtitles,
         "safe_area": {"x": round(width * 0.08), "y": round(height * 0.68), "width": round(width * 0.84), "height": round(height * 0.16)},
-        "quality": {"automatic": "结构、时码、媒体解码与交付规格", "manual_required": ["字幕最终可读性与字形", "人脸/服饰/道具一致性", "剧情连续性", "口型、表演与听感"]},
+        "quality": {"automatic": "结构、时码、媒体解码与交付规格及源音轨模式", "warnings": warnings, "manual_required": ["字幕最终可读性与字形", "人脸/服饰/道具一致性", "剧情连续性", "口型、表演与听感"]},
     }
     errors = validate_timeline(manifest)
     if errors:
@@ -203,6 +256,9 @@ def validate_timeline(timeline: dict[str, Any]) -> list[str]:
         return ["时间线必须为 JSON 对象"]
     if timeline.get("schema") != SCHEMA:
         errors.append("不支持的时间线 schema")
+    sound_mode = timeline.get("sound_mode")
+    if sound_mode not in SOUND_MODES:
+        errors.append("时间线必须声明有效 sound_mode（model/dub/silent）")
     try:
         total = _integer(timeline.get("duration_frames"), "duration_frames", 1)
         width = _integer(timeline.get("width"), "width", 2)
@@ -236,6 +292,12 @@ def validate_timeline(timeline: dict[str, Any]) -> list[str]:
                 errors.append(f"镜头缺少素材路径或哈希: {shot_id}")
             if media.get("kind") not in {"image", "video"}:
                 errors.append(f"镜头媒体类型无效: {shot_id}")
+            if media.get("sound_mode") != sound_mode:
+                errors.append(f"镜头素材 sound_mode 与时间线不一致: {shot_id}")
+            if media.get("has_source_audio") is not None and not isinstance(media["has_source_audio"], bool):
+                errors.append(f"源音轨标记无效: {shot_id}")
+            if sound_mode == "model" and (media.get("kind") != "video" or media.get("has_source_audio") is not True):
+                errors.append(f"model 模式必须保留已验证的视频原声: {shot_id}")
         if outro.get("start_frame", cursor) != cursor:
             errors.append("片尾与镜头时间线存在缺口或重叠")
         if cursor + _integer(outro.get("duration_frames", 0), "outro.duration_frames") != total:
@@ -252,6 +314,8 @@ def validate_timeline(timeline: dict[str, Any]) -> list[str]:
             raise ValueError("subtitles 必须为字幕对象数组")
         if not isinstance(tracks, list) or any(not isinstance(track, dict) for track in tracks):
             raise ValueError("tracks 必须为音轨对象数组")
+        if sound_mode != "dub" and tracks:
+            errors.append("model/silent 模式禁止外部音轨，避免重复或意外发声")
         for line in lines:
             shot = by_id.get(line.get("shot_id"))
             if not shot:

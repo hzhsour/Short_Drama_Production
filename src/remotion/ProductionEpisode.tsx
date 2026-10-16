@@ -5,11 +5,13 @@ import {
 } from "remotion";
 
 type Card = { start_frame: number; duration_frames: number; title: string; subtitle: string };
+type SoundMode = "model" | "dub" | "silent";
 export type TimelineManifest = {
   schema: "short-drama.timeline/v1";
   episode_id: string;
   title: string;
   technical_test: boolean;
+  sound_mode: SoundMode;
   fps: number;
   width: number;
   height: number;
@@ -21,7 +23,7 @@ export type TimelineManifest = {
     scene_id: string;
     start_frame: number;
     duration_frames: number;
-    media: { kind: "image" | "video"; path: string; sha256: string; source_start_frame: number };
+    media: { kind: "image" | "video"; path: string; sha256: string; source_start_frame: number; sound_mode: SoundMode; has_source_audio: boolean | null };
     transition: { kind: "fade" | "cut"; duration_frames: number };
   }>;
   tracks: Array<{
@@ -80,7 +82,7 @@ const Shot: React.FC<{ shot: TimelineManifest["shots"][number] }> = ({ shot }) =
       {shot.media.kind === "image" ? (
         <Img src={mediaSource(shot.media.path)} style={style} />
       ) : (
-        <OffthreadVideo src={mediaSource(shot.media.path)} startFrom={shot.media.source_start_frame} muted style={style} />
+        <OffthreadVideo src={mediaSource(shot.media.path)} startFrom={shot.media.source_start_frame} muted={shot.media.sound_mode !== "model"} style={style} />
       )}
     </AbsoluteFill>
   );
@@ -103,7 +105,14 @@ const Captions: React.FC<{ timeline: TimelineManifest }> = ({ timeline }) => {
   );
 };
 
-export const ProductionEpisode: React.FC<ProductionEpisodeProps> = ({ timeline }) => (
+export const ProductionEpisode: React.FC<ProductionEpisodeProps> = ({ timeline }) => {
+  if (!["model", "dub", "silent"].includes(timeline.sound_mode)
+      || timeline.shots.some((shot) => shot.media.sound_mode !== timeline.sound_mode)
+      || (timeline.sound_mode !== "dub" && timeline.tracks.length > 0)
+      || (timeline.sound_mode === "model" && timeline.shots.some((shot) => shot.media.has_source_audio !== true))) {
+    throw new Error("音频模式不一致：必须明确保留模型原声、外部配音或静音，禁止重复混音");
+  }
+  return (
   <AbsoluteFill style={{ backgroundColor: "#090b12", fontFamily: '"Noto Sans CJK SC", "Microsoft YaHei", sans-serif' }}>
     {timeline.intro.duration_frames > 0 && (
       <Sequence from={timeline.intro.start_frame} durationInFrames={timeline.intro.duration_frames} name="片头">
@@ -130,10 +139,12 @@ export const ProductionEpisode: React.FC<ProductionEpisodeProps> = ({ timeline }
       <div style={{ position: "absolute", top: timeline.height * 0.05, left: timeline.width * 0.08, padding: "8px 14px", fontSize: timeline.width * 0.023, color: "#ffe0ad", background: "rgba(0,0,0,.5)", borderRadius: 8 }}>技术测试 · 本地占位素材</div>
     )}
   </AbsoluteFill>
-);
+  );
+};
 
 export const defaultTimeline: TimelineManifest = {
   schema: "short-drama.timeline/v1", episode_id: "EP000", title: "数据驱动短剧合成", technical_test: true,
+  sound_mode: "dub",
   fps: 30, width: 1080, height: 1920, duration_frames: 90,
   intro: { start_frame: 0, duration_frames: 90, title: "数据驱动短剧合成", subtitle: "请通过 render_episode.mjs 加载制作时间线" },
   outro: { start_frame: 90, duration_frames: 0, title: "", subtitle: "" },

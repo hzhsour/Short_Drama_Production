@@ -296,6 +296,7 @@ def build_audio(storyboard: dict, characters: dict, output_dir: Path, mode: str 
     errors = validate_storyboard(storyboard, characters)
     if errors:
         raise ValueError("音频输入校验失败:\n" + "\n".join(errors))
+    sound_mode = storyboard.get("sound_mode", "dub")
     output_dir = Path(output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     asset_root = Path(asset_root).resolve() if asset_root else None
@@ -321,6 +322,11 @@ def build_audio(storyboard: dict, characters: dict, output_dir: Path, mode: str 
                 cue = {"kind": "ambience", "description": cue, "start_frame": 0,
                        "duration_frames": shot["duration_frames"], "volume": .2}
             entries.append({**cue, "id": f"{shot_id}-{cue['kind']}-{number:03}", "volume": cue.get("volume", .2)})
+        # Model audio is already embedded in the generated video. Silent mode
+        # deliberately has no audible sources. Both retain dialogue captions,
+        # and neither invokes even a configured local TTS adapter.
+        if sound_mode != "dub":
+            continue
         for entry in entries:
             path = output_dir / f"{entry['id']}.wav"
             voice = profiles[entry["character_id"]]["voice"] if entry["kind"] == "dialogue" else {}
@@ -346,14 +352,17 @@ def build_audio(storyboard: dict, characters: dict, output_dir: Path, mode: str 
             quality.append({"id": entry["id"], **inspection})
             track = {"id": entry["id"], "shot_id": shot_id, "kind": entry["kind"], "path": str(path),
                      "start_frame": entry["start_frame"], "duration_frames": entry["duration_frames"],
-                     "volume": entry["volume"], "mode": mode, "fingerprint": signature}
+                     "volume": entry["volume"], "mode": mode, "sound_mode": sound_mode, "fingerprint": signature}
             if entry["kind"] == "dialogue":
                 track.update(character_id=entry["character_id"], voice_profile_id=voice["profile_id"])
             tracks.append(track)
     srt_path = output_dir / f"{storyboard['episode_id']}.srt"
     _exclusive_bytes(srt_path, subtitles_to_srt(storyboard, subtitles).encode("utf-8"))
-    result = {"episode_id": storyboard["episode_id"], "mode": mode, "tracks": tracks,
+    notice = {"model": "保留模型原声；不生成外部配音、BGM 或 SFX，仅导出字幕", "silent": "全片静音；不生成音轨，仅导出字幕"}.get(sound_mode)
+    if notice is None:
+        notice = "技术测试音调，不是真人配音或中文 TTS" if mode == "mock" else "本地录音/已配置离线 TTS"
+    result = {"episode_id": storyboard["episode_id"], "mode": mode, "sound_mode": sound_mode, "tracks": tracks,
               "subtitles": subtitles, "srt_path": str(srt_path), "sample_rate": sample_rate,
-              "quality": quality, "notice": "技术测试音调，不是真人配音或中文 TTS" if mode == "mock" else "本地录音/已配置离线 TTS"}
+              "quality": quality, "notice": notice}
     _exclusive_bytes(output_dir / "audio-manifest.json", (json.dumps(result, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
     return result

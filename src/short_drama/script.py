@@ -46,7 +46,7 @@ def _convert(script: dict) -> tuple[dict, list[str]]:
             converted.setdefault("scene_id", scene_id)
             converted.setdefault("location", scene.get("location"))
             result["shots"].append(converted)
-    for key in ("title", "technical_test", "version", "width", "height"):
+    for key in ("title", "technical_test", "version", "width", "height", "sound_mode"):
         if key in script:
             result[key] = deepcopy(script[key])
     return result, errors

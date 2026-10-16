@@ -37,12 +37,16 @@ class HttpTransport:
         self.opener = opener or urllib.request.build_opener(_NoRedirect())
         self.max_download_bytes = max_download_bytes
         self.download_timeout_seconds = download_timeout_seconds
+        self.deadline: float | None = None
 
     def request(self, method: str, url: str, headers: dict[str, str], body: dict[str, Any] | None = None) -> dict[str, Any]:
+        remaining = 60 if self.deadline is None else self.deadline - time.monotonic()
+        if remaining <= 0:
+            raise SafeRetryError("local wait deadline reached before HTTP request")
         data = json.dumps(body).encode() if body is not None else None
         request = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
-            with self.opener.open(request, timeout=60) as response:
+            with self.opener.open(request, timeout=min(60, remaining)) as response:
                 return json.load(response)
         except urllib.error.HTTPError as error:
             # Explicit HTTP rejection is known not to have returned a task ID.
@@ -66,10 +70,14 @@ class HttpTransport:
             raise ProviderError("Ark downloads require the approved HTTPS volces.com CDN; redirects/private hosts are disabled")
         created = False
         deadline = time.monotonic() + self.download_timeout_seconds
+        if self.deadline is not None:
+            deadline = min(deadline, self.deadline)
+        if time.monotonic() >= deadline:
+            raise SafeRetryError("local wait deadline reached before artifact download")
         try:
             with destination.open("xb") as output:
                 created = True
-                with self.opener.open(url, timeout=min(30, self.download_timeout_seconds)) as response:
+                with self.opener.open(url, timeout=min(30, max(0.001, deadline - time.monotonic()))) as response:
                     length = response.headers.get("Content-Length")
                     if length is not None and int(length) > self.max_download_bytes:
                         raise ProviderError("Ark download exceeds the configured byte limit")
@@ -77,6 +85,8 @@ class HttpTransport:
                     while True:
                         remaining = deadline - time.monotonic()
                         if remaining <= 0:
+                            if self.deadline is not None and deadline == self.deadline:
+                                raise SafeRetryError("local wait deadline reached during artifact download")
                             raise ProviderError("Ark download exceeded the total time limit")
                         # read1 makes at most one raw read instead of waiting to
                         # fill 64 KiB while a peer slowly trickles bytes. Tighten
@@ -141,6 +151,12 @@ class ArkAdapter:
             "model": self.model_id, "content": content,
             "ratio": "9:16", "resolution": "1080p", "duration": int(seconds),
         }
+        sound_mode = request.get("sound_mode")
+        if sound_mode not in {"model", "dub", "silent"}:
+            raise ProviderError("Ark requires an explicit sound_mode: model, dub, or silent")
+        if request.get("generate_audio") is not (sound_mode == "model"):
+            raise ProviderError("generate_audio must agree with the explicit sound_mode")
+        body["generate_audio"] = sound_mode == "model"
         response = self.transport.request("POST", self.base_url + "/contents/generations/tasks", self._headers(), body)
         task_id = response.get("id")
         if not isinstance(task_id, str) or not task_id:
@@ -155,6 +171,21 @@ class ArkAdapter:
         if status not in {"queued", "running", "succeeded", "failed", "cancelled", "expired"}:
             raise ProviderError("Ark returned an unknown task status")
         result: dict[str, Any] = {"provider_job_id": provider_job_id, "status": status}
+        # Keep only documented accounting/specification fields. Do not persist
+        # the raw response, signed URLs outside artifact_url, prompts or headers.
+        usage = response.get("usage")
+        if isinstance(usage, dict):
+            result["provider_usage"] = {
+                key: value for key, value in usage.items()
+                if key in {"completion_tokens", "total_tokens"}
+                and isinstance(value, int) and not isinstance(value, bool) and value >= 0
+            }
+        metadata: dict[str, Any] = {"task_id": provider_job_id}
+        for key in ("id", "model", "resolution", "ratio", "duration", "framespersecond", "generate_audio", "seed", "created_at", "updated_at"):
+            value = response.get(key)
+            if isinstance(value, (str, int, float, bool)) and (not isinstance(value, str) or len(value) <= 200):
+                metadata[key] = value
+        result["provider_task_metadata"] = metadata
         if status == "succeeded":
             url = response.get("content", {}).get("video_url")
             if not isinstance(url, str) or not url.startswith("https://"):

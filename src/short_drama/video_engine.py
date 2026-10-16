@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from .providers import MockAdapter, ProviderError, SafeRetryError, SubmissionUnknownError, VideoAdapter
-from .providers.ark import ArkAdapter, UnavailableAdapter
+from .providers.ark import ArkAdapter, HttpTransport, UnavailableAdapter
 from .state import StateError, StateStore
 from .storage import ArtifactStorage, LocalStorage, StorageError, sha256_file
 
@@ -35,6 +35,10 @@ class EngineError(RuntimeError):
 
 class LiveBlockedError(EngineError):
     pass
+
+
+class WaitBudgetReached(EngineError):
+    """A local waiting bound was reached; the provider task is still resumable."""
 
 
 def canonical_hash(value: Any) -> str:
@@ -101,10 +105,15 @@ def probe_video(path: Path, request: dict[str, Any]) -> dict[str, Any]:
         raise EngineError("downloaded artifact frame rate differs from the model generation specification")
     # Decode every frame, not merely a container/header check.
     subprocess.run([ffmpeg, "-nostdin", "-v", "error", "-xerror", "-i", str(path), "-f", "null", "-"], capture_output=True, check=True, timeout=300)
+    has_audio = any(stream.get("codec_type") == "audio" for stream in data.get("streams", []))
+    if request.get("sound_mode") == "model" and not has_audio:
+        raise EngineError("model sound was requested but the downloaded video has no audio track; refusing silent loss")
     return {
         "width": video["width"], "height": video["height"], "fps": fps,
         "duration_seconds": duration, "video_codec": video.get("codec_name"),
-        "audio_present": any(stream.get("codec_type") == "audio" for stream in data.get("streams", [])),
+        "audio_present": has_audio, "has_audio": has_audio,
+        "sound_mode": request.get("sound_mode", "dub"),
+        "source_audio_disposition": "preserve_model_audio" if request.get("sound_mode") == "model" else "discard_for_external_dub" if request.get("sound_mode", "dub") == "dub" else "discard_for_silent_output",
         "decode_checked": True,
     }
 
@@ -142,6 +151,9 @@ class VideoEngine:
         # SQLite coordinates distinct instances/processes. One instance shares
         # its lease owner, so its own mutating operations must also be serialized.
         self._operation_lock = threading.Lock()
+        self._active_deadline: float | None = None
+        self._poll_budget: int | None = None
+        self._polls_used = 0
 
     @property
     def ledger_id(self) -> str:
@@ -243,6 +255,11 @@ class VideoEngine:
             if isinstance(frames, bool) or not isinstance(frames, int) or frames <= 0 or frames > fps * 600:
                 raise EngineError("shot duration_frames must be positive and at most ten minutes")
             duration = frames / fps
+            sound_mode = shot.get("sound_mode", storyboard.get("sound_mode"))
+            if sound_mode is None and self.mode == "mock":
+                sound_mode = "dub"
+            if sound_mode not in {"model", "dub", "silent"}:
+                raise EngineError("each Live shot requires an explicit sound_mode: model, dub, or silent")
             generation_duration = duration
             if self.adapter.paid:
                 generation_duration = max(self.model_config.get("capabilities", {}).get("min_duration_seconds", 4), math.ceil(duration))
@@ -256,6 +273,7 @@ class VideoEngine:
                 "location": shot.get("location"), "action": shot.get("action"), "framing": shot.get("framing"),
                 "camera_move": shot.get("camera_move"), "image_prompt": shot.get("image_prompt", ""),
                 "video_prompt": shot.get("video_prompt", ""), "audio": shot.get("audio", []),
+                "sound_mode": sound_mode, "generate_audio": sound_mode == "model",
                 "dialogue": shot.get("dialogue", []), "continuity_refs": shot.get("continuity_refs", []),
                 "reference_images": self._references(shot), "reference_videos": shot.get("reference_videos", []),
                 "duration_frames": frames, "duration_seconds": duration,
@@ -275,6 +293,9 @@ class VideoEngine:
                 "job_key": f"{episode_id}:{shot_id}:{request_hash[:16]}", "request_hash": request_hash,
                 "episode_id": episode_id, "shot_id": shot_id, "status": "pending", "request": request,
                 "estimated_cost": estimate, "currency": currency, "cost_reason": cost_reason,
+                "reserved_budget": None, "provider_usage": None, "provider_task_metadata": None,
+                "calculated_cost": None,
+                "billing_reconciliation_status": "awaiting_provider_usage" if self.adapter.paid else "local_mock_not_billed",
                 "model_selection_reason": self.model_config.get("reason") or (
                     "default offline technical fixture validates the pipeline" if not self.adapter.paid
                     else "explicit provider selection using an exact documented model; live success is unverified"
@@ -285,7 +306,8 @@ class VideoEngine:
                     "sources": self.model_config.get("sources", []),
                     "pricing": self.model_config.get("pricing", {"status": "local_mock"}),
                 },
-                "attempts": {"submit": 0, "poll": 0, "download": 0}, "artifact": None,
+                "attempts": {"submit": 0, "poll": 0, "download": 0},
+                "error_counts": {"submit": 0, "poll": 0, "download": 0}, "artifact": None,
             })
         return jobs
 
@@ -359,19 +381,99 @@ class VideoEngine:
         return text[:1000]
 
     def _call(self, job: dict[str, Any], phase: str, operation: Any) -> Any:
-        while job["attempts"][phase] < self.max_retries + 1:
+        # attempts is a lifetime audit counter. Only consecutive failed calls
+        # consume retries; normal queued/running polling is not a failure.
+        errors = job.setdefault("error_counts", {"submit": 0, "poll": 0, "download": 0})
+        while errors[phase] < self.max_retries + 1:
+            if ((self._active_deadline is not None and time.monotonic() >= self._active_deadline)
+                    or (phase == "poll" and self._poll_budget is not None and self._polls_used >= self._poll_budget)):
+                raise WaitBudgetReached("local wait deadline or poll budget reached; resume the existing provider task ID")
             if not self.state.claim(job["job_key"], self.owner):
                 raise EngineError("job lease belongs to another worker; no provider request was made")
             job["attempts"][phase] += 1
             self.state.save(job)
             try:
-                return operation()
+                if phase == "poll":
+                    self._polls_used += 1
+                result = operation()
+                errors[phase] = 0
+                self.state.save(job)
+                return result
             except SafeRetryError as error:
+                if self._active_deadline is not None and time.monotonic() >= self._active_deadline:
+                    # A shorter local wait timeout is not provider failure and
+                    # must not exhaust the durable error budget across resumes.
+                    raise WaitBudgetReached("local wait deadline reached during a safely retryable operation") from None
+                errors[phase] += 1
                 job["last_error"] = self._error_text(error)
                 self.state.save(job)
-                if job["attempts"][phase] >= self.max_retries + 1:
+                if errors[phase] >= self.max_retries + 1:
                     raise
         raise ProviderError(f"{phase} retry limit exhausted; operator review required")
+
+    def _record_provider_accounting(self, job: dict[str, Any], result: dict[str, Any]) -> None:
+        if not self.adapter.paid:
+            return
+        usage = result.get("provider_usage")
+        if isinstance(usage, dict):
+            safe = {key: value for key, value in usage.items()
+                    if key in {"completion_tokens", "total_tokens"} and isinstance(value, int)
+                    and not isinstance(value, bool) and value >= 0}
+            previous = job.get("provider_usage") or {}
+            observations = job.setdefault("provider_usage_observations", [])
+            if previous and not observations:  # migrate an older single-response checkpoint
+                observations.append(dict(previous))
+            if safe and safe not in observations:
+                observations.append(dict(safe))
+            job["provider_usage_latest"] = safe
+            # An API correction must not silently erase a previously observed
+            # financial exposure. Keep both responses and identify the maxima
+            # used by conservative calculation; a final invoice resolves them.
+            job["provider_usage"] = {key: max(previous.get(key, 0), safe.get(key, 0)) for key in previous.keys() | safe.keys()}
+            job["provider_usage_basis"] = "highest_observed_tokens_pending_final_invoice"
+        metadata = result.get("provider_task_metadata")
+        if isinstance(metadata, dict):
+            allowed = {"task_id", "id", "model", "resolution", "ratio", "duration", "framespersecond", "generate_audio", "seed", "created_at", "updated_at"}
+            job["provider_task_metadata"] = {key: value for key, value in metadata.items() if key in allowed and isinstance(value, (str, int, float, bool))}
+        job["provider_task_metadata"] = {
+            "task_id": job["provider_job_id"], "requested_model": job["request"]["model_id"],
+            "requested_output": {**job["request"]["target"], "generation_fps": job["request"]["generation_fps"],
+                                 "generation_duration_seconds": job["request"]["generation_duration_seconds"],
+                                 "sound_mode": job["request"]["sound_mode"]},
+            **(job.get("provider_task_metadata") or {}),
+        }
+        pricing = job["provenance"].get("pricing", {})
+        completion_tokens = (job.get("provider_usage") or {}).get("completion_tokens")
+        reason = "provider completion_tokens are unknown; original budget reservation is retained"
+        job["calculated_cost"] = job.get("calculated_cost")
+        if completion_tokens is not None and pricing.get("unit") == "million_output_tokens":
+            try:
+                valid_until = datetime.fromisoformat(pricing["valid_until"].replace("Z", "+00:00"))
+                submitted_at = datetime.fromtimestamp(job["submitted_at"], timezone.utc)
+                if (pricing.get("status") != "verified_live_quote" or not pricing.get("source_url")
+                        or valid_until.tzinfo is None or valid_until <= submitted_at
+                        or pricing.get("estimate_supported_scope") != "no_input_video_standard_generation_only"
+                        or job["request"].get("reference_videos")):
+                    raise ValueError("quote was not verified and valid for the accepted task")
+                returned_model = (job.get("provider_task_metadata") or {}).get("model")
+                if returned_model is not None and returned_model != job["request"]["model_id"]:
+                    raise ValueError("returned model differs from the approved pricing model")
+                returned = job.get("provider_task_metadata") or {}
+                if (returned.get("resolution", "1080p") != "1080p"
+                        or returned.get("ratio", "9:16") != "9:16"
+                        or returned.get("framespersecond", job["request"]["generation_fps"]) != job["request"]["generation_fps"]):
+                    raise ValueError("returned output specification does not match the verified pricing profile")
+                rate = positive_decimal(pricing["rates"]["1080p"]["without_input_video"], "verified token price")
+                job["calculated_cost"] = str((Decimal(completion_tokens) * rate / 1000000).quantize(Decimal("0.000001"), rounding=ROUND_CEILING))
+                reason = "provider completion_tokens multiplied by the request-bound verified quote; not a final invoice or actual debit"
+            except (KeyError, ValueError, TypeError, LiveBlockedError):
+                reason = "provider usage retained, but verified applicable rate/output scope is unavailable; reservation is retained"
+                job["accounting_requires_review"] = True
+        elif completion_tokens is not None:
+            reason = "provider tokens retained; billing unit is not supported for usage-derived calculation"
+        job["calculated_cost_reason"] = reason
+        job["billing_reconciliation_status"] = "pending_final_invoice" if job["calculated_cost"] is not None else "provider_usage_unpriced" if completion_tokens is not None else "awaiting_provider_usage"
+        self.state.observe_cost(job)
 
     def _execute(self, job: dict[str, Any], limits: dict[str, Decimal], currency: str) -> None:
         if job["status"] in {"succeeded", "artifact_invalid"}:
@@ -386,8 +488,8 @@ class VideoEngine:
             # A provider task is reused for downloads; never pay for regeneration.
             if not job.get("provider_job_id"):
                 return
-            job["attempts"]["download"] = 0
-            job["attempts"]["poll"] = 0
+            job.setdefault("error_counts", {"submit": 0, "poll": 0, "download": 0})["download"] = 0
+            job["error_counts"]["poll"] = 0
             job["status"] = "submitted"
         if job["status"] in {"submission_unknown", "failed"}:
             return
@@ -398,15 +500,27 @@ class VideoEngine:
             return
         try:
             if not job.get("provider_job_id"):
+                if self._active_deadline is not None and time.monotonic() >= self._active_deadline:
+                    return
                 if self.mode == "live":
                     # A batch can outlive the initial approval/quote. Recheck
                     # immediately before each potentially billable submission.
                     limits, currency = self._authorize([job])
                     self.state.reserve(job["job_key"], job["episode_id"], currency, Decimal(job["estimated_cost"]), limits["per_task"], limits["per_episode"], limits["project"])
+                    job["reserved_budget"] = job["estimated_cost"]
+                if self._active_deadline is not None and time.monotonic() >= self._active_deadline:
+                    self.state.save(job)
+                    return
                 job["status"] = "submitting"
                 self.state.save(job)
                 try:
                     submitted = self._call(job, "submit", lambda: self.adapter.submit(self._runtime_request(job["request"]), job["request_hash"]))
+                except WaitBudgetReached:
+                    # _call raises this only before the next operation; prior
+                    # submit retries, if any, were explicitly known rejections.
+                    # No ambiguous HTTP response is converted into this signal.
+                    job["status"] = "pending"
+                    raise
                 except SafeRetryError:
                     job["status"] = "failed"
                     raise
@@ -417,16 +531,17 @@ class VideoEngine:
                     job["status"] = "submission_unknown"
                     raise SubmissionUnknownError("provider returned no task ID")
                 job["provider_job_id"] = submitted["provider_job_id"]
+                job["submitted_at"] = time.time()
                 job["status"] = "submitted"
                 self.state.save(job)
                 self.state.event(job["job_key"], "submitted")
             result = self._call(job, "poll", lambda: self.adapter.poll(job["provider_job_id"]))
+            self._record_provider_accounting(job, result)
             status = result.get("status")
             if status in {"queued", "pending", "submitted", "running"}:
                 job["status"] = "running" if status == "running" else "submitted"
                 # Pending is a successful status check, not a failure/retry. A later
                 # invocation can poll again without exhausting the error budget.
-                job["attempts"]["poll"] = 0
                 self.state.save(job)
                 return
             if status != "succeeded":
@@ -452,12 +567,24 @@ class VideoEngine:
                 if job.get("artifact") and not self.storage.verify(job["artifact"]):
                     key = f"{job['episode_id']}/{job['shot_id']}/{job['request_hash']}-recovered-{uuid.uuid4().hex[:8]}.mp4"
                 artifact = self.storage.put(download_path, key)
-                artifact.update({"quality": quality, "technical_mock": self.mode == "mock", "human_review": "pending"})
+                artifact.update({"quality": quality, "technical_mock": self.mode == "mock", "human_review": "pending",
+                                 "sound_mode": job["request"].get("sound_mode", "dub"), "has_audio": quality["has_audio"],
+                                 "has_source_audio": quality["has_audio"],
+                                 "source_audio_disposition": quality["source_audio_disposition"]})
                 job["artifact"] = artifact
             job["status"] = "succeeded"
             job.pop("last_error", None)
             self.state.save(job)
             self.state.event(job["job_key"], "succeeded", json.dumps({"key": artifact["key"], "sha256": artifact["sha256"]}))
+        except WaitBudgetReached:
+            # A bounded local wait says nothing about the remote task outcome.
+            # Keep its accepted ID and current submitted/running checkpoint.
+            if job["status"] == "submitting" and not job.get("provider_job_id"):
+                job["status"] = "pending"  # only known pre-call/rejected calls can reach this branch
+            elif job["status"] == "downloading":
+                job["status"] = "submitted"
+            self.state.save(job)
+            self.state.event(job["job_key"], "wait_limit_reached")
         except Exception as error:
             job["last_error"] = self._error_text(error)
             if isinstance(error, (LiveBlockedError, StateError)):
@@ -465,13 +592,31 @@ class VideoEngine:
             elif job["status"] not in {"submission_unknown", "failed"}:
                 # The retained provider ID permits only poll/download recovery.
                 # Retry counts persist and are never automatically reset here.
-                job["status"] = "failed" if not job.get("provider_job_id") else "retry_exhausted" if any(value >= self.max_retries + 1 for phase, value in job["attempts"].items() if phase != "submit") else "submitted"
+                job["status"] = "failed" if not job.get("provider_job_id") else "retry_exhausted" if any(value >= self.max_retries + 1 for phase, value in job.get("error_counts", {}).items() if phase != "submit") else "submitted"
             self.state.save(job)
             self.state.event(job["job_key"], "error", job["last_error"])
 
-    def run(self, storyboard: dict[str, Any], max_jobs: int | None = None) -> dict[str, Any]:
+    def run(self, storyboard: dict[str, Any], max_jobs: int | None = None, *, deadline: float | None = None,
+            poll_budget: int | None = None) -> dict[str, Any]:
+        if deadline is not None and (isinstance(deadline, bool) or not isinstance(deadline, (int, float)) or not math.isfinite(deadline)):
+            raise ValueError("deadline must be a finite monotonic timestamp")
+        if poll_budget is not None and (isinstance(poll_budget, bool) or not isinstance(poll_budget, int) or poll_budget < 0):
+            raise ValueError("poll_budget must be a nonnegative integer")
         with self._operation_lock:
-            return self._run_unlocked(storyboard, max_jobs)
+            self._active_deadline = deadline
+            self._poll_budget, self._polls_used = poll_budget, 0
+            transport = getattr(self.adapter, "transport", None)
+            transport = transport if isinstance(transport, HttpTransport) else None
+            previous_transport_deadline = transport.deadline if transport else None
+            if transport:
+                transport.deadline = deadline
+            try:
+                return self._run_unlocked(storyboard, max_jobs)
+            finally:
+                self._active_deadline = None
+                self._poll_budget = None
+                if transport:
+                    transport.deadline = previous_transport_deadline
 
     def _run_unlocked(self, storyboard: dict[str, Any], max_jobs: int | None = None) -> dict[str, Any]:
         if max_jobs is not None and (isinstance(max_jobs, bool) or not isinstance(max_jobs, int) or max_jobs < 0):
@@ -489,6 +634,8 @@ class VideoEngine:
             self.state.ensure(job)
         processed = 0
         for plan in plans:
+            if self._active_deadline is not None and time.monotonic() >= self._active_deadline:
+                break
             if max_jobs is not None and processed >= max_jobs:
                 break
             if not self.state.claim(plan["job_key"], self.owner):
@@ -515,6 +662,10 @@ class VideoEngine:
             "technical_mock": self.mode == "mock", "jobs": jobs,
             "estimated_cost": str(sum(known_costs, Decimal(0))) if len(known_costs) == len(plans) else None,
             "currency": currency, "reserved_project_cost": str(self.state.reserved_total(currency)),
+            "financial_summary": self.state.financial_summary(currency),
+            "wait_limits": {"polls_used": self._polls_used,
+                            "deadline_reached": self._active_deadline is not None and time.monotonic() >= self._active_deadline,
+                            "poll_budget_reached": self._poll_budget is not None and self._polls_used >= self._poll_budget},
             "all_succeeded": all(job and job["status"] == "succeeded" for job in jobs),
             "state_path": str(self.state.path),
             "ledger_id": self.state.ledger_id,
