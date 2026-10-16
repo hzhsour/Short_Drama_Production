@@ -1,0 +1,11 @@
+{
+  "approved": false,
+  "approval_id": null,
+  "provider": "volcengine-seedance-2.5",
+  "model_id": "doubao-seedance-2-5-260628",
+  "request_hashes": [],
+  "expires_at": null,
+  "currency": "CNY",
+  "limits": {"per_task": "0", "per_episode": "0", "project": "0"},
+  "creative": {"approved": false, "script_sha256": null, "characters_sha256": null}
+}

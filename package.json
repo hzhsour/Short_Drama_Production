@@ -1,23 +1,28 @@
 {
   "name": "short-drama-production",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "中文 AI 短剧制作工作区与本地 Remotion 预览项目",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "test": "python3 -m unittest discover -s tests -v",
-    "validate": "python3 tools/validate_project.py",
+    "test": "node tools/python.mjs -m unittest discover -s tests -v && node tools/python.mjs -m unittest discover -s .agents/skills/create-storyboard/scripts -p test_*.py -v",
+    "validate": "node tools/python.mjs tools/validate_project.py",
     "typecheck": "tsc --noEmit",
-    "preview": "node tools/render_preview.mjs"
+    "preview": "node tools/render_preview.mjs",
+    "drama": "node tools/python.mjs tools/drama.py",
+    "check": "node tools/check.mjs",
+    "demo": "node tools/python.mjs tools/drama.py demo --render",
+    "e2e": "npm run demo && node tools/python.mjs tools/verify_demo.py --check-resume",
+    "doctor": "node tools/python.mjs tools/drama.py doctor"
   },
   "dependencies": {
-    "@remotion/cli": "^4.0.0",
-    "@remotion/renderer": "^4.0.0",
+    "@remotion/cli": "4.0.536",
+    "@remotion/renderer": "4.0.536",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "remotion": "^4.0.0"
+    "remotion": "4.0.536"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",

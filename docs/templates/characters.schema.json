@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Character Visual and Voice Profiles",
+  "description": "Planned reference paths are permitted. Metadata checks do not guarantee generated face or story consistency; references and output require human review.",
+  "type": "object",
+  "required": [
+    "characters"
+  ],
+  "properties": {
+    "characters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "character_id",
+          "name",
+          "age",
+          "face_features",
+          "hairstyle",
+          "body",
+          "outfits",
+          "reference_images",
+          "expressions",
+          "fixed_props",
+          "scene_looks",
+          "historical_shots",
+          "relationships",
+          "voice"
+        ],
+        "properties": {
+          "character_id": {
+            "type": "string",
+            "pattern": "^CHAR-\\d{3}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "age": {
+            "type": "string",
+            "minLength": 1
+          },
+          "face_features": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hairstyle": {
+            "type": "string",
+            "minLength": 1
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1
+          },
+          "outfits": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "description",
+                "props"
+              ],
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "props": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "uniqueItems": true
+                }
+              }
+            }
+          },
+          "reference_images": {
+            "type": "object",
+            "required": [
+              "front",
+              "side",
+              "back"
+            ],
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\:\\u0000]+$"
+            }
+          },
+          "expressions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "fixed_props": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "scene_looks": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^EP\\d{3}-SC\\d{2}$"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "historical_shots": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^EP\\d{3}-SC\\d{2}-SH\\d{2,3}$"
+            },
+            "uniqueItems": true
+          },
+          "relationships": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^CHAR-\\d{3}$"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "voice": {
+            "type": "object",
+            "required": [
+              "profile_id",
+              "language",
+              "pitch_hz",
+              "rate"
+            ],
+            "properties": {
+              "profile_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "language": {
+                "const": "zh-CN"
+              },
+              "pitch_hz": {
+                "type": "number",
+                "minimum": 80,
+                "maximum": 500
+              },
+              "rate": {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 2
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
