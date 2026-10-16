@@ -1,0 +1,22 @@
+{
+  "episode_id": "EP001",
+  "aspect_ratio": "9:16",
+  "fps": 30,
+  "shots": [
+    {
+      "shot_id": "EP001-SC01-SH001",
+      "scene_id": "EP001-SC01",
+      "duration_frames": 45,
+      "characters": ["CHAR-001"],
+      "location": "LOC-001",
+      "action": "林知夏停下脚步，抬眼看向旧书店亮起的灯。",
+      "framing": "中近景",
+      "camera_move": "缓慢推进",
+      "dialogue": [],
+      "audio": ["雨声渐弱", "远处车流声"],
+      "image_prompt": "雨夜旧街，年轻女性背影，暖色书店灯光与冷色街景形成对比，电影感，9:16 竖屏。",
+      "video_prompt": "镜头缓慢推进，角色停步后抬眼，雨滴自然落下，面部与服装保持参考图一致。",
+      "continuity_refs": ["CHAR-001-front-reference.png", "LOC-001-night-reference.png"]
+    }
+  ]
+}

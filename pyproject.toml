@@ -1,0 +1,9 @@
+[project]
+name = "short-drama-production-tools"
+version = "0.1.0"
+description = "标准库驱动的短剧制作数据检查工具"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.unittest]
+test-dir = "tests"
